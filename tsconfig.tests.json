@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": false,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@spatial-label-layout/core": ["packages/core/src/index.ts"],
+      "@spatial-label-layout/debug": ["packages/debug/src/index.ts"]
+    }
+  },
+  "include": ["tests/**/*.ts", "benchmarks/**/*.ts", "examples/**/*.ts", "vitest.config.ts"]
+}

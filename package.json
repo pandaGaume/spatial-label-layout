@@ -1,0 +1,37 @@
+{
+  "name": "spatial-label-layout",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Renderer-agnostic 3D label layout engine: mesh anchors, persistent leaders, camera-projected collision solving, stereo/WebXR validation.",
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b && tsc -p tsconfig.tests.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bench": "vitest bench --run",
+    "bench:budget": "tsc -b && tsx benchmarks/budget.ts",
+    "example:basic": "tsc -b && tsx examples/basic/main.ts",
+    "example:dense": "tsc -b && tsx examples/dense-labels/main.ts",
+    "example:terrain": "tsc -b && tsx examples/terrain/main.ts",
+    "example:webxr": "tsc -b && tsx examples/webxr/main.ts",
+    "clean": "tsc -b --clean"
+  },
+  "devDependencies": {
+    "@spatial-label-layout/core": "workspace:*",
+    "@spatial-label-layout/debug": "workspace:*",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
