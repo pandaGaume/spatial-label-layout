@@ -79,18 +79,18 @@ Worst case, a full solve every 5° of orbit with stabilization off (mean / p95 m
 
 | Labels | Mono, uniform | Mono, clustered | Stereo, uniform | Stereo, clustered |
 |---|---|---|---|---|
-| 10 | 0.3 / 0.6 | 0.2 / 0.4 | 0.2 / 0.5 | 0.2 / 0.5 |
-| 100 | 4.6 / 12.0 | 19.1 / 26.3 | 9.5 / 19.3 | 42.8 / 52.9 |
-| 500 | 122 / 137 | 246 / 272 | 352 / 629 | 699 / 876 |
+| 10 | 0.3 / 0.7 | 0.3 / 1.4 | 0.1 / 0.4 | 0.2 / 0.4 |
+| 100 | 3.8 / 9.1 | 15.7 / 19.7 | 7.0 / 15.1 | 32.2 / 39.7 |
+| 500 | 134 / 180 | 232 / 312 | 279 / 344 | 537 / 739 |
 
-At 100 labels the uniform scenes converge on every step. The clustered ones keep about 9 overlapping pairs per view, and at 500 labels nothing converges.
+At 100 labels the uniform scenes converge on every step. The clustered ones converge about half the time and keep 1.3 to 1.4 overlapping pairs per view on average. At 500 labels the uniform scene converges on 12 of 72 steps with about 2.7 residual pairs per view; the clustered one never converges (around 200 pairs per view), which is where the priority declutter is meant to take over.
 
 Realistic loop: 90 fps rendering, solver at 10 Hz, stabilization on, 20°/s orbit plus head jitter, 10 s.
 
 | Labels | Cost per rendered frame (amortized) | Solve p95 | Discrete jumps per second | Residual collisions per view |
 |---|---|---|---|---|
-| 100 | 0.28 ms | 7.1 ms | 2.3 | 0 |
-| 500 | 13.2 ms | 159 ms | 51 | 16 |
+| 100 | 0.24 ms | 6.0 ms | 2.5 | 0.01 |
+| 500 | 8.3 ms | 99 ms | 52 | 15 |
 
 So the 100-label MVP case fits a 90 Hz frame comfortably. 500 labels does not: a single solve takes several frames, and while the camera keeps orbiting the layout keeps reorganizing. That needs the M4 work (incremental evaluation, worker thread) before it is usable.
 
