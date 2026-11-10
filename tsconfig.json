@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/core" },
-    { "path": "packages/debug" }
+    { "path": "packages/debug" },
+    { "path": "packages/babylon" }
   ]
 }

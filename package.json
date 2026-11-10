@@ -19,6 +19,8 @@
     "clean": "tsc -b --clean"
   },
   "devDependencies": {
+    "@babylonjs/core": "9.33.1",
+    "@spatial-label-layout/babylon": "workspace:*",
     "@spatial-label-layout/core": "workspace:*",
     "@spatial-label-layout/debug": "workspace:*",
     "@types/node": "^22.10.0",

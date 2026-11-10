@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@babylonjs/core':
+        specifier: 9.33.1
+        version: 9.33.1
+      '@spatial-label-layout/babylon':
+        specifier: workspace:*
+        version: link:packages/babylon
       '@spatial-label-layout/core':
         specifier: workspace:*
         version: link:packages/core
@@ -27,6 +33,15 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.5)(tsx@4.23.15)
 
+  packages/babylon:
+    devDependencies:
+      '@babylonjs/core':
+        specifier: 9.33.1
+        version: 9.33.1
+      '@spatial-label-layout/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/core: {}
 
   packages/debug:
@@ -36,6 +51,9 @@ importers:
         version: link:../core
 
 packages:
+
+  '@babylonjs/core@9.33.1':
+    resolution: {integrity: sha512-NoIfREw4QeoXzRPpXnbUpmxxPIjuRi9iS4xFDbPgXHiLwCeHSI13DJHF8YB2gKHp6rA6T5R7BAevPvWHklvXWQ==}
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -608,6 +626,8 @@ packages:
     hasBin: true
 
 snapshots:
+
+  '@babylonjs/core@9.33.1': {}
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true

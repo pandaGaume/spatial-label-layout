@@ -1,0 +1,28 @@
+{
+  "name": "@spatial-label-layout/babylon",
+  "version": "0.1.0",
+  "description": "Babylon.js adapter for spatial label layout: camera views, renderers that place the application's own 3D label objects and their leaders, render loop hook.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "@babylonjs/core": "^9.0.0",
+    "@spatial-label-layout/core": "^0.1.0"
+  },
+  "devDependencies": {
+    "@babylonjs/core": "9.33.1",
+    "@spatial-label-layout/core": "workspace:*"
+  },
+  "license": "UNLICENSED"
+}

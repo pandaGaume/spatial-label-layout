@@ -2,12 +2,13 @@
 
 Free placement of 3D labels around pins attached to meshes. The core has no rendering dependency: it projects billboards into each camera view (one for desktop, two eyes plus a head pose for WebXR), resolves overlaps there, and returns world positions. Each label keeps its leader to the same pin for its whole life. Labels are world-space billboards; there is no DOM overlay.
 
-This repository implements the *Spatial Label Layout v1.0* brief up to milestone M1: core, debug tooling, tests and benchmarks. Engine adapters (Babylon.js for M2, three.js later) are not here yet. [docs/porting.md](docs/porting.md) lists what each one has to implement.
+This repository implements the *Spatial Label Layout v1.0* brief up to milestone M1 (core, debug tooling, tests and benchmarks) and the Babylon.js adapter of M2. The three.js adapter is not here yet. [docs/porting.md](docs/porting.md) lists what an adapter has to implement.
 
 | Package | Contents |
 |---|---|
 | `@spatial-label-layout/core` | math, solver, public API, integration ports. No dependencies. |
 | `@spatial-label-layout/debug` | SVG snapshots, metrics recorder, in-memory renderers that double as reference adapters |
+| `@spatial-label-layout/babylon` | Babylon.js adapter: camera views, renderers that place the application's own 3D label objects and their leaders, render loop hook. Peer dependency on `@babylonjs/core` 9. |
 
 ## Getting started
 
@@ -44,6 +45,33 @@ const controller = new LabelLayoutController({ camera, anchors, labelRenderer, l
 renderLoop((dt) => controller.tick(dt));
 ```
 
+With Babylon.js, `BabylonLabelLayout` wires the controller to a scene. The labels are 3D objects the application builds itself; the adapter places, orients and scales them:
+
+```ts
+import { BabylonLabelLayout } from "@spatial-label-layout/babylon";
+
+const layout = new BabylonLabelLayout({
+  scene,
+  // Any node whose local x reads to the right and y upward; `front` tells which way its face looks.
+  labels: { create: (label) => ({ node: buildMyTag(label), width: 2, height: 0.8, front: "+z" }) },
+  leaders: { width: 1.5 }, // pixels
+});
+layout.engine.setAnchorPosition("summit", { x: 0, y: 2, z: 0 });
+layout.controller.addLabel({ id: "label-summit", anchorId: "summit", position: { x: 0, y: 2, z: 0 }, dimensions: { width: 120, height: 48 }, sizing: "screen", priority: 1, visible: true, enabled: true });
+```
+
+The layout advances before each render of the scene. An application with its own frame loop passes `autoTick: false` and calls `layout.tick()`.
+
+## Labels with a constant size on screen
+
+By default `dimensions` are world units, and a label shrinks on screen as the camera moves away. A label with `sizing: "screen"` gives its dimensions in pixels instead, which suits maps, globes and any scene whose camera distance varies by orders of magnitude:
+
+- the engine resolves its world size for each solve, and the controller for each rendered frame, at the depth of its pin;
+- each solve starts from where the label stood on screen relative to its pin, not from where it stood in the world;
+- between two solves the default interpolator (`ScreenLockedInterpolator`) holds it at that pixel offset, so it follows the camera rigidly during a zoom instead of drifting away from its pin or falling on it.
+
+Two engine options go with it. `anchorOutOfView: "hide"` hides the label of a pin that left every view, where the default keeps it on screen with a leader running off it. `temporal.screenThresholdPx` replaces the world-unit thresholds of the stabilizer (5 cm, 1 mm) by one in pixels: the layout is solved again once a pin moved more than that on screen, whatever the scale of the scene.
+
 ## How it behaves
 
 Labels are placed once from candidate positions around their pin. After that they move continuously, and only by small corrections. The solver runs at 10 Hz and skips work while the head moves less than 1.5° or 5 cm. Discrete jumps (swapping two labels to uncross their leaders, re-placing a stuck label) need the defect to persist for three solves and are rate-limited per label. Small head motion produces no reorganization; a test checks this over 60 jittered solves of a 100-label scene.
@@ -56,7 +84,9 @@ Rendering engine dependencies all go through ports, and every member added for f
 - `CameraProvider` for mono or XR views and the reference frame version
 - `LabelRenderer`, `LeaderRenderer` for the native objects
 - `OcclusionProvider` (raycast, depth, hybrid)
-- `BillboardOrienter`, `SpatialIndex2D`, `CandidateGenerator`, `DeclutterStrategy`, `LeaderRouter` for strategies
+- `BillboardOrienter`, `SpatialIndex2D`, `CandidateGenerator`, `DeclutterStrategy`, `LeaderRouter`, `PlacementInterpolator` for strategies
+
+Vectors go in as plain `{ x, y, z }` shapes and are read through their properties, so engine vectors that keep their coordinates behind accessors (Babylon.js) can be passed as they are.
 
 Coordinate conventions (column-major matrices, any handedness, pixels with y down) and the full pipeline are in [docs/architecture.md](docs/architecture.md).
 
@@ -98,8 +128,12 @@ So the 100-label MVP case fits a 90 Hz frame comfortably. 500 labels does not: a
 
 Collisions use the bounding box of the projected corners. Tilted billboards near the edge of a wide field of view are therefore kept slightly further apart than necessary.
 
-`elbow` and `polyline` leaders exist but do not avoid obstacles.
+`elbow` leaders are orthogonal by default, as in the brief (horizontal from the pin, vertical, horizontal into the label); `polyline` leaders go through points the caller gives. Neither avoids obstacles.
+
+With `temporal.screenThresholdPx`, a camera moving straight toward a pin at the center of the view moves no pin on screen: world-sized labels grow there without a new solve. The option is meant for screen-sized labels.
+
+The performance figures above were measured before screen sizing was added and have not been run again.
 
 Very dense scenes, with hundreds of labels packed into a few centimetres of screen, are not solved without overlap. The engine reports `impossible-density` and can hide labels by priority. Clustering would plug into `DeclutterStrategy` and is not written.
 
-None of this has run inside Babylon.js, three.js or a headset yet: every test uses synthetic cameras.
+The Babylon.js adapter is tested with Babylon's null engine, in left- and right-handed scenes, and runs in one application on a streamed globe with a mono camera. Its WebXR path (one view per rig camera) has not run in a headset. Nothing has run in three.js.

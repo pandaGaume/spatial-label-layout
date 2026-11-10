@@ -41,7 +41,21 @@ Handedness does not matter. Babylon (left-handed) and three (right-handed) both 
 
 Use the controller's orientation. `BillboardTransform` carries `right`, `up` and `normal`; orient the mesh from those axes rather than from a native billboard mode. If the rendered quad and the solver's quad disagree, collisions are computed on the wrong shape.
 
-## Babylon.js sketch
+## Babylon.js
+
+The adapter is the package `@spatial-label-layout/babylon`:
+
+| Class | Port | Notes |
+|---|---|---|
+| `BabylonCameraProvider` | `CameraProvider` | Copies the matrices at each call. Viewport in CSS pixels by default. One view per rig camera when the camera has a rig (not run in a headset). |
+| `BabylonLabelRenderer` | `LabelRenderer` | Places the application's own 3D objects: position, orientation from the controller's axes, scaling from the size the layout gives. `front` tells which local z the face of an object looks toward. |
+| `BabylonLeaderRenderer` | `LeaderRenderer` | One thin cylinder per segment of the route, width in pixels or world units. |
+| `BabylonLabelLayout` | | Builds the three above and a controller, and ticks before each render of the scene. |
+
+It reads view matrices as they are in left- and right-handed scenes, and in scenes with floating origin (large world rendering), whose view matrix holds the true world position.
+
+The sketch below is what the package does, kept as a guide for other engines.
+
 
 ```ts
 import { LabelLayoutController, FixedRateScheduler, TransformAnchorProvider, type CameraProvider, type CameraView } from "@spatial-label-layout/core";

@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       "@spatial-label-layout/core": r("./packages/core/src/index.ts"),
       "@spatial-label-layout/debug": r("./packages/debug/src/index.ts"),
+      "@spatial-label-layout/babylon": r("./packages/babylon/src/index.ts"),
     },
   },
   test: {
