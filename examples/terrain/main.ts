@@ -2,7 +2,7 @@
  * Terrain demo without a 3D library: 100 mesh-local anchors on a heightfield,
  * raymarched terrain occlusion, the generic controller driven at 90 fps with
  * the solver at 10 Hz, and in-memory renderers standing in for Babylon/three.
- *   pnpm example:terrain
+ *   npm run example:terrain
  */
 import {
   FixedRateScheduler,

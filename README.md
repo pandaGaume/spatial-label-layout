@@ -7,17 +7,17 @@ This repository implements the *Spatial Label Layout v1.0* brief up to milestone
 | Package | Contents |
 |---|---|
 | `@spacexr/spatial-label-layout-core` | math, solver, public API, integration ports. No dependencies. |
-| `@spacexr/spatial-label-layout-debug` | SVG snapshots, metrics recorder, in-memory renderers that double as reference adapters |
+| `@spacexr/spatial-label-layout-debug` | SVG snapshots, metrics recorder, in-memory renderers that double as reference adapters. Private: not published to npm. |
 | `@spacexr/spatial-label-layout-babylon` | Babylon.js adapter: camera views, renderers that place the application's own 3D label objects and their leaders, render loop hook. Peer dependency on `@babylonjs/core` 9. |
 
 ## Getting started
 
-Requires Node 20+ and pnpm (pinned through `packageManager`, so `corepack pnpm` works without a global install).
+Requires Node 20 or later. The repository is an npm workspace.
 
 ```bash
-corepack pnpm install
-corepack pnpm test
-corepack pnpm example:basic
+npm install
+npm test
+npm run example:basic
 ```
 
 Using the engine directly:
@@ -94,36 +94,43 @@ Coordinate conventions (column-major matrices, any handedness, pixels with y dow
 
 | Command | |
 |---|---|
-| `pnpm build` | compile the packages (`tsc -b`) |
-| `pnpm typecheck` | packages plus tests, benchmarks and examples |
-| `pnpm test` | Vitest: unit, integration, stereo |
-| `pnpm bench` | Vitest micro-benchmarks |
-| `pnpm bench:budget` | brief §11 budgets, worst case and realistic XR loop |
-| `pnpm example:basic`, `example:dense`, `example:terrain`, `example:webxr` | Node examples; SVG output in `examples/*/out/` |
+| `npm run build` | compile the packages (`tsc -b`) |
+| `npm run typecheck` | packages plus tests, benchmarks and examples |
+| `npm test` | Vitest: unit, integration, stereo |
+| `npm run bench` | Vitest micro-benchmarks |
+| `npm run bench:budget` | brief §11 budgets, worst case and realistic XR loop |
+| `npm run example:basic`, `example:dense`, `example:terrain`, `example:webxr` | Node examples; SVG output in `examples/*/out/` |
 
 ## Releasing
 
-The three packages are published to npm under the `@spacexr` organization, at the same version, by [.github/workflows/release.yaml](.github/workflows/release.yaml) when a tag `vX.Y.Z` is pushed. The workflow checks that the tag carries the version of every `packages/*/package.json`, runs the type check and the tests, packs with pnpm (which replaces the `workspace:` ranges by real versions) and publishes the tarballs with npm.
+The core and the Babylon.js adapter are published to npm under the `@spacexr` organization, at the same version, by [.github/workflows/release.yaml](.github/workflows/release.yaml) when a tag `vX.Y.Z` is pushed. The workflow checks that the tag carries the version of every `packages/*/package.json`, builds, runs the type check and the tests, and publishes each package from its workspace.
 
 ```bash
-corepack pnpm -r exec npm version 0.2.0 --no-git-tag-version   # the three packages
+npm version 0.2.0 --workspaces --no-git-tag-version   # every package, debug included
+# then set the same version where a package names another: the dependency of debug
+# and the peer range of babylon on the core
 git commit -am "Release 0.2.0"
 git tag v0.2.0
 git push origin main
 git push origin v0.2.0
 ```
 
-The workflow publishes through npm trusted publishing (OIDC), with no token. A package must exist on npm before a trusted publisher can be set on it, so the first version is published by hand, from the root:
+The workflow publishes through npm trusted publishing (OIDC), with no token. A package must exist on npm before a trusted publisher can be set on it, so the first version is published by hand, from the root, after `npm run build`:
 
 ```bash
-corepack pnpm -r publish --access public
+npm publish --workspace @spacexr/spatial-label-layout-core --access public
+npm publish --workspace @spacexr/spatial-label-layout-babylon --access public
 ```
 
-Then, on npmjs.com, each of the three packages gets this repository and `release.yaml` as its trusted publisher.
+Then, on npmjs.com, each of the two packages gets this repository and `release.yaml` as its trusted publisher.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
 
 ## Performance
 
-The brief targets under 5 ms per solve for 100 labels and under 15 ms for 500, measured on the reference machine and with no guarantee. Numbers below come from `pnpm bench:budget` on a Windows laptop (Node 22, compiled output), labels scattered on a terrain over 24 × 24 m, 1920 × 1080 viewport. "Clustered" puts 60% of the pins in a 3 × 3 m hotspot.
+The brief targets under 5 ms per solve for 100 labels and under 15 ms for 500, measured on the reference machine and with no guarantee. Numbers below come from `npm run bench:budget` on a Windows laptop (Node 22, compiled output), labels scattered on a terrain over 24 × 24 m, 1920 × 1080 viewport. "Clustered" puts 60% of the pins in a 3 × 3 m hotspot.
 
 Worst case, a full solve every 5° of orbit with stabilization off (mean / p95 ms):
 

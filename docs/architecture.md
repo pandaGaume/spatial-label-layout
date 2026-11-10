@@ -114,6 +114,6 @@ New labels are exempt because they are still being placed. The cost of all this:
 
 ## Performance (brief §11)
 
-The brief's targets are indicative: under 5 ms for 100 labels and under 15 ms for 500, to be measured on the reference machine. `pnpm bench:budget` prints two tables. The worst case runs a full solve every 5° of a 360° orbit with stabilization off. The realistic one runs a 90 fps render loop with the solver at 10 Hz, stabilization on, a slow orbit and head jitter, and reports amortised cost per frame and discrete jumps per second. Numbers measured during development are in the README.
+The brief's targets are indicative: under 5 ms for 100 labels and under 15 ms for 500, to be measured on the reference machine. `npm run bench:budget` prints two tables. The worst case runs a full solve every 5° of a 360° orbit with stabilization off. The realistic one runs a 90 fps render loop with the solver at 10 Hz, stabilization on, a slow orbit and head jitter, and reports amortised cost per frame and discrete jumps per second. Numbers measured during development are in the README.
 
 Cost depends heavily on density. What remains to try (M4 in the brief): incremental evaluation that only re-projects labels whose view or anchor changed, allocation-free typed buffers, and moving the solve to a worker or WASM.

@@ -1,6 +1,7 @@
 name: release
 
-# Publishes the three packages to npm when a version tag is pushed:
+# Publishes the core and the Babylon.js adapter to npm when a version tag is pushed
+# (the debug package is private):
 #   git tag v0.2.0 && git push origin v0.2.0
 # The tag must carry the version written in every packages/*/package.json.
 on:
@@ -18,8 +19,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
-          node-version: 22.x
+          node-version: 20.x
           registry-url: https://registry.npmjs.org
+          cache: npm
 
       - name: Check that the tag matches the package versions
         run: |
@@ -31,27 +33,17 @@ jobs:
             fi
           done
 
-      # pnpm comes from the `packageManager` field of package.json.
-      - run: corepack enable
-      - run: pnpm install --frozen-lockfile
-      # Builds the packages (tsc -b), then type-checks tests, benchmarks and examples.
-      - run: pnpm typecheck
-      - run: pnpm test
-
-      # pnpm writes the tarballs: it replaces the `workspace:` ranges by the real
-      # versions, which `npm publish` on a package folder would publish as they are.
-      - name: Pack
-        run: pnpm --filter "./packages/*" pack --pack-destination "$GITHUB_WORKSPACE/artifacts"
-
-      # npm publishes them: trusted publishing (OIDC) needs npm 11.5.1 or later.
+      # Trusted publishing (OIDC) needs npm 11.5.1 or later; Node 20 ships npm 10.
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@^11
 
-      - name: Publish
-        run: |
-          for package in core debug babylon; do
-            npm publish artifacts/spacexr-spatial-label-layout-$package-*.tgz --access public --provenance
-          done
+      - run: npm ci
+      - run: npm run build
+      # Type-checks tests, benchmarks and examples too, which `build` skips.
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm publish --workspace @spacexr/spatial-label-layout-core --access public --provenance
+      - run: npm publish --workspace @spacexr/spatial-label-layout-babylon --access public --provenance
 
       - name: Dump npm debug logs on failure
         if: failure()

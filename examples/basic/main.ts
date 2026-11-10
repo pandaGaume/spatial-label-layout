@@ -1,7 +1,7 @@
 /**
  * Minimal use of the engine without any rendering library:
  * anchors in world space, one solve, a debug SVG of the result.
- *   pnpm example:basic
+ *   npm run example:basic
  */
 import { SpatialLabelLayoutEngine, createCameraView } from "@spacexr/spatial-label-layout-core";
 import { formatResult, renderViewSvg } from "@spacexr/spatial-label-layout-debug";

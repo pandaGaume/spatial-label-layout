@@ -3,8 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "description": "Renderer-agnostic 3D label layout engine: mesh anchors, persistent leaders, camera-projected collision solving, stereo/WebXR validation.",
+  "license": "Apache-2.0",
+  "author": "Guillaume Pelletier (SpaceXR)",
   "type": "module",
-  "packageManager": "pnpm@10.34.9",
+  "workspaces": [
+    "packages/core",
+    "packages/debug",
+    "packages/babylon"
+  ],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b && tsc -p tsconfig.tests.json",
@@ -20,18 +26,10 @@
   },
   "devDependencies": {
     "@babylonjs/core": "9.33.1",
-    "@spacexr/spatial-label-layout-babylon": "workspace:*",
-    "@spacexr/spatial-label-layout-core": "workspace:*",
-    "@spacexr/spatial-label-layout-debug": "workspace:*",
     "@types/node": "^22.10.0",
     "tsx": "^4.20.0",
     "typescript": "~5.9.3",
     "vitest": "^3.2.4"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   },
   "engines": {
     "node": ">=20"

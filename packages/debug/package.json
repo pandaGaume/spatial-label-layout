@@ -1,7 +1,10 @@
 {
   "name": "@spacexr/spatial-label-layout-debug",
+  "private": true,
   "version": "0.1.0",
   "description": "Renderer-agnostic diagnostics: SVG snapshots, metrics recorder, recording ports.",
+  "license": "Apache-2.0",
+  "author": "Guillaume Pelletier (SpaceXR)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pandaGaume/spatial-label-layout.git",
@@ -23,14 +26,12 @@
   },
   "files": [
     "dist",
-    "!dist/.tsbuildinfo"
+    "!dist/.tsbuildinfo",
+    "LICENSE",
+    "README.md"
   ],
   "sideEffects": false,
   "dependencies": {
-    "@spacexr/spatial-label-layout-core": "workspace:*"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "license": "UNLICENSED"
+    "@spacexr/spatial-label-layout-core": "0.1.0"
+  }
 }

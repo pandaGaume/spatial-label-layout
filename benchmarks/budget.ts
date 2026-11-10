@@ -1,7 +1,7 @@
 /**
  * Performance budget report (brief section 11): solve time and quality
  * metrics over a 360 degree orbit, mono and stereo, 10 / 100 / 500 labels.
- * Run: pnpm bench:budget
+ * Run: npm run bench:budget
  */
 import { FixedRateScheduler, LabelLayoutController } from "@spacexr/spatial-label-layout-core";
 import { MetricsRecorder } from "@spacexr/spatial-label-layout-debug";

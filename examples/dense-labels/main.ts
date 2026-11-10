@@ -1,7 +1,7 @@
 /**
  * Impossible density: 300 labels around one hotspot. Shows the explicit
  * diagnostics, then the priority declutter fallback.
- *   pnpm example:dense
+ *   npm run example:dense
  */
 import { SpatialLabelLayoutEngine, createCameraView, type LayoutResult } from "@spacexr/spatial-label-layout-core";
 import { formatResult, renderViewSvg } from "@spacexr/spatial-label-layout-debug";

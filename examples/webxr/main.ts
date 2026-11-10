@@ -4,7 +4,7 @@
  * In a browser, the adapter would build these CameraViews from
  * `XRFrame.getViewerPose(refSpace).views` (`view.transform.inverse.matrix`
  * and `view.projectionMatrix`).
- *   pnpm example:webxr
+ *   npm run example:webxr
  */
 import { FixedRateScheduler, LabelLayoutController, StaticCameraProvider, createStereoViews } from "@spacexr/spatial-label-layout-core";
 import { MetricsRecorder, RecordingLabelRenderer, RecordingLeaderRenderer, formatSummary, renderViewSvg } from "@spacexr/spatial-label-layout-debug";
