@@ -1,6 +1,6 @@
 {
   "name": "@spacexr/spatial-label-layout-babylon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Babylon.js adapter for spatial label layout: camera views, renderers that place the application's own 3D label objects and their leaders, render loop hook.",
   "license": "Apache-2.0",
   "author": "Guillaume Pelletier (SpaceXR)",
@@ -32,7 +32,7 @@
   "sideEffects": false,
   "peerDependencies": {
     "@babylonjs/core": "^9.0.0",
-    "@spacexr/spatial-label-layout-core": "^0.1.0"
+    "@spacexr/spatial-label-layout-core": "^0.1.1"
   },
   "devDependencies": {
     "@babylonjs/core": "9.33.1"

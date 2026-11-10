@@ -1,7 +1,7 @@
 {
   "name": "@spacexr/spatial-label-layout-debug",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Renderer-agnostic diagnostics: SVG snapshots, metrics recorder, recording ports.",
   "license": "Apache-2.0",
   "author": "Guillaume Pelletier (SpaceXR)",
@@ -32,6 +32,6 @@
   ],
   "sideEffects": false,
   "dependencies": {
-    "@spacexr/spatial-label-layout-core": "0.1.0"
+    "@spacexr/spatial-label-layout-core": "0.1.1"
   }
 }
