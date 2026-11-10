@@ -22,6 +22,7 @@ import {
   type ProjectedPoint,
   type ResolvedView,
 } from "../projection/view.js";
+import { placeAtScreenOffset, resolveLabelSize, screenOffset } from "../projection/screen.js";
 import { LeaderRouterRegistry } from "../routing/router.js";
 import { TemporalStabilizer } from "../temporal/stabilizer.js";
 import { diffTopology, LeaderGraph, TopologyError } from "../topology/leader-graph.js";
@@ -29,6 +30,7 @@ import type {
   EnergyBreakdown,
   HiddenReason,
   LabelAnchor,
+  LabelDimensions,
   LabelLeader,
   LabelPlacement,
   LayoutContext,
@@ -67,11 +69,17 @@ interface LabelRecord {
   position: Vec3;
   /** True once the label has a position worth warm-starting from. */
   placed: boolean;
+  /** "screen" sizing: pixel offset from the pin in the reference view of the last solve. The next solve starts from it. */
+  offset: Vec2 | null;
+  /** World size used by the last solve. */
+  size: LabelDimensions | null;
 }
 
 interface AnchorRecord {
   def?: LabelAnchor;
   world: Vec3 | null;
+  /** World position at the last solve (on-screen motion test of `screenThresholdPx`). */
+  solved?: Vec3 | null;
 }
 
 /** Per-solve working state of an active label. */
@@ -95,6 +103,10 @@ interface Work {
   fresh: boolean;
   mobility: number;
   frame: BillboardFrame;
+  /** World size for this solve (resolved from pixels for "screen" sizing). */
+  size: LabelDimensions;
+  /** "screen" sizing: the committed position is also kept as a pixel offset from the pin. */
+  screen: boolean;
 }
 
 /** Defect categories: leader crossing pair, residual collision, occlusion. */
@@ -224,6 +236,8 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       leader,
       position: clone(label.position),
       placed: this.config.initialization === "provided" && isFiniteVec3(label.position),
+      offset: null,
+      size: null,
     });
     this.dirty = true;
   }
@@ -250,6 +264,8 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       dimensions: patch.dimensions ? { ...patch.dimensions } : rec.label.dimensions,
     };
     validateLabel(next);
+    // An explicit position, or a change of unit, supersedes the pixel offset kept for "screen" sizing.
+    if (patch.position || (next.sizing ?? "world") !== (rec.label.sizing ?? "world")) rec.offset = null;
     rec.label = next;
     if (patch.position) {
       rec.position = clone(patch.position);
@@ -308,7 +324,9 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     if (!isFiniteVec3(worldPosition)) throw new RangeError(`anchor "${id}": position must be finite`);
     let rec = this.anchors.get(id);
     if (!rec) this.anchors.set(id, (rec = { world: null }));
-    if (!rec.world || distance(rec.world, worldPosition) > this.config.temporal.anchorMoveThreshold) this.dirty = true;
+    const t = this.config.temporal;
+    // With a screen threshold, pin motion is measured in pixels at the next solve instead.
+    if (!rec.world || (t.screenThresholdPx === undefined && distance(rec.world, worldPosition) > t.anchorMoveThreshold)) this.dirty = true;
     rec.world = clone(worldPosition);
   }
 
@@ -352,6 +370,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
   reset(): void {
     this.assertAlive();
     for (const r of this.records.values()) r.placed = this.config.initialization === "provided";
+    for (const r of this.records.values()) r.offset = null;
     for (const r of this.records.values()) if (r.placed) r.position = clone(r.label.position);
     this.lastResult = null;
     this.stabilizer.reset();
@@ -396,7 +415,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     if (context.forceReset) this.reset();
     this.clock += Math.max(0, context.deltaTime);
 
-    const decision = this.stabilizer.decide(ref, context.deltaTime, this.dirty, context.forceReset === true, this.reorg.pending);
+    const decision = this.stabilizer.decide(ref, context.deltaTime, this.dirty, context.forceReset === true, this.reorg.pending, this.screenMotion(ref));
     if (!decision.solve && this.lastResult) {
       const result = this.reuseLast(t0, decision.reason);
       for (const o of this.observers) o.onSolveEnd?.(result);
@@ -431,6 +450,19 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
           }
           if (cfg.behindCamera === "reposition") pullTarget = this.behindCameraProxy(ref, anchor);
         }
+        if (cfg.anchorOutOfView === "hide" && !this.anchorInView(anchor, views)) {
+          hidden.set(rec.label.id, "anchor-out-of-view");
+          continue;
+        }
+        const size = resolveLabelSize(rec.label, ref, pullTarget);
+        if (!size) {
+          // A pixel size has no world equivalent at a point the reference view cannot see.
+          hidden.set(rec.label.id, "anchor-behind-camera");
+          continue;
+        }
+        // "screen" sizing: start from where the label stood on screen, not from where it stood in the world.
+        const screen = rec.label.sizing === "screen";
+        const start = (screen && rec.placed && rec.offset && placeAtScreenOffset(ref, pullTarget, rec.offset)) || rec.position;
         work.push({
           rec,
           id: rec.label.id,
@@ -438,13 +470,15 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
           anchor,
           pullTarget,
           pullPx: projectPoint(ref, pullTarget),
-          pos: clone(rec.position),
-          start: clone(rec.position),
-          origin: clone(rec.position),
+          pos: clone(start),
+          start: clone(start),
+          origin: clone(start),
           hadPlacement: rec.placed,
           fresh: !rec.placed,
           mobility: 1 / (1 + Math.max(0, rec.label.priority)),
-          frame: cfg.orienter.frame(rec.position, ref),
+          frame: cfg.orienter.frame(start, ref),
+          size,
+          screen,
         });
       }
 
@@ -507,7 +541,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
           messages.push({ code: "label-decluttered", message: `${toHide.size} label(s) hidden by ${strategy.kind} declutter`, labelIds: [...toHide] });
           const kept = work.filter((w) => !toHide.has(w.id));
           // Hidden labels keep their position for a smooth return.
-          for (const w of work) if (toHide.has(w.id)) this.commit(w);
+          for (const w of work) if (toHide.has(w.id)) this.commit(w, ref);
           work.length = 0;
           work.push(...kept);
           evaluation = this.evaluate(work, views);
@@ -546,7 +580,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
           travelled += d;
           motion += d * d;
         }
-        this.commit(w);
+        this.commit(w, ref);
       }
 
       const energy = this.energy(work, ref, evaluation, motion);
@@ -579,6 +613,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
 
       this.lastResult = result;
       this.dirty = false;
+      for (const a of this.anchors.values()) a.solved = a.world ? clone(a.world) : null;
       this.reorg.pending = this.computePending();
       this.stabilizer.markSolved(ref);
       this.emitPhase("evaluate", { collisions: result.unresolvedCollisions, occlusions: result.unresolvedOcclusions, repaired: repaired ? 1 : 0 });
@@ -609,12 +644,15 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       for (const rec of this.records.values()) {
         const anchorWorld = this.anchors.get(rec.label.anchorId)?.world ?? null;
         const reason = this.classify(rec) ?? hiddenById.get(rec.label.id);
-        const frame = this.config.orienter.frame(rec.position, ref);
-        const pb = projectBillboard(view, rec.position, frame, rec.label.dimensions);
+        // "screen" sizing: the label is drawn where it stands on screen now, at its size in pixels.
+        const size = (anchorWorld ? resolveLabelSize(rec.label, ref, anchorWorld) : null) ?? rec.size ?? rec.label.dimensions;
+        const position = (rec.label.sizing === "screen" && rec.offset && anchorWorld && placeAtScreenOffset(ref, anchorWorld, rec.offset)) || rec.position;
+        const frame = this.config.orienter.frame(position, ref);
+        const pb = projectBillboard(view, position, frame, size);
         const ap = anchorWorld ? projectPoint(view, anchorWorld) : null;
         let leader: Vec2[] | null = null;
         if (anchorWorld) {
-          const pts = this.routers.route({ leader: rec.leader, anchor: anchorWorld, labelCenter: rec.position, frame, size: rec.label.dimensions });
+          const pts = this.routers.route({ leader: rec.leader, anchor: anchorWorld, labelCenter: position, frame, size });
           const proj = pts.map((p) => projectPoint(view, p));
           leader = proj.every((p) => p.inFront) ? proj.map((p) => ({ x: p.x, y: p.y })) : null;
         }
@@ -684,9 +722,43 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     return undefined;
   }
 
-  private commit(w: Work): void {
+  private commit(w: Work, ref: ResolvedView): void {
     w.rec.position = clone(w.pos);
     w.rec.placed = true;
+    w.rec.size = w.size;
+    w.rec.offset = w.screen ? screenOffset(ref, w.pullTarget, w.pos) : null;
+  }
+
+  /** True when the pin projects inside at least one view (grown by `anchorViewMarginPx`). */
+  private anchorInView(anchor: Vec3, views: readonly ResolvedView[]): boolean {
+    const m = this.config.anchorViewMarginPx;
+    return views.some((v) => {
+      const p = projectPoint(v, anchor);
+      return p.inFront && p.x >= -m && p.x <= v.viewport.width + m && p.y >= -m && p.y <= v.viewport.height + m;
+    });
+  }
+
+  /**
+   * Largest on-screen displacement of the pin of an active label since the
+   * last solve, whether the camera or the pin moved. Undefined unless
+   * `temporal.screenThresholdPx` is set.
+   */
+  private screenMotion(ref: ResolvedView): number | undefined {
+    if (this.config.temporal.screenThresholdPx === undefined) return undefined;
+    const last = this.stabilizer.solvedView;
+    if (!last || last.viewport.width !== ref.viewport.width || last.viewport.height !== ref.viewport.height) return Infinity;
+    let worst = 0;
+    for (const rec of this.records.values()) {
+      if (this.classify(rec)) continue;
+      const anchor = this.anchors.get(rec.label.anchorId);
+      if (!anchor?.world) continue;
+      if (!anchor.solved) return Infinity;
+      const before = projectPoint(last, anchor.solved);
+      const now = projectPoint(ref, anchor.world);
+      if (before.inFront !== now.inFront) return Infinity;
+      if (now.inFront) worst = Math.max(worst, Math.hypot(now.x - before.x, now.y - before.y));
+    }
+    return worst;
   }
 
   /** A point in front of the camera, pushed toward the side where the hidden pin lies. */
@@ -751,7 +823,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     };
     for (const w of work) {
       if (!include(w)) continue;
-      const pb = projectBillboard(ref, w.pos, w.frame, w.rec.label.dimensions);
+      const pb = projectBillboard(ref, w.pos, w.frame, w.size);
       if (pb.valid) ids.set(w, insert(inflate(pb.rect, cfg.paddingPx / 2)));
     }
     if (cfg.avoidAnchors) {
@@ -783,7 +855,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     skip?: ReadonlySet<number>,
   ): { rect: Rect2; cost: number } | null {
     const cfg = this.config;
-    const size = w.rec.label.dimensions;
+    const size = w.size;
     const pb = projectBillboard(ref, c, cfg.orienter.frame(c, ref), size);
     if (!pb.valid) return null;
     const r = inflate(pb.rect, cfg.paddingPx / 2);
@@ -830,7 +902,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
           anchor: w.pullTarget,
           view: ref,
           frame,
-          size: w.rec.label.dimensions,
+          size: w.size,
           leaderLengthPx: cfg.leaderLengthPx * s,
         }),
       );
@@ -843,7 +915,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     const cfg = this.config;
     const pending: Work[] = [];
     for (const w of work) {
-      const pb = w.hadPlacement ? projectBillboard(ref, w.pos, w.frame, w.rec.label.dimensions) : null;
+      const pb = w.hadPlacement ? projectBillboard(ref, w.pos, w.frame, w.size) : null;
       if (!pb || !pb.valid) pending.push(w);
     }
     if (pending.length === 0) return 0;
@@ -857,7 +929,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
         w.pos = best.pos;
         insert(best.rect);
       } else {
-        w.pos = addScaled(w.pullTarget, cfg.orienter.frame(w.pullTarget, ref).up, w.rec.label.dimensions.height);
+        w.pos = addScaled(w.pullTarget, cfg.orienter.frame(w.pullTarget, ref).up, w.size.height);
       }
       w.start = clone(w.pos);
       w.origin = clone(w.pos);
@@ -992,7 +1064,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
 
       // Soft forces (annealed so that constraints dominate the final iterations).
       for (const w of work) {
-        const pb = projectBillboard(ref, w.pos, w.frame, w.rec.label.dimensions);
+        const pb = projectBillboard(ref, w.pos, w.frame, w.size);
         const delta = this.softDelta(w, ref, gain, pb);
         if (delta) {
           w.pos = add(w.pos, delta);
@@ -1019,7 +1091,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
         index.clear();
         for (let i = 0; i < n; i++) {
           const w = work[i] as Work;
-          const pb = projectBillboard(view, w.pos, w.frame, w.rec.label.dimensions);
+          const pb = projectBillboard(view, w.pos, w.frame, w.size);
           projections[i] = pb;
           rects[i] = pb.valid ? inflate(pb.rect, pad) : null;
           if (rects[i]) index.insert(i, rects[i] as Rect2);
@@ -1137,8 +1209,8 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
         const vy = pb.center.y - pa.y;
         const d = Math.hypot(vx, vy);
         if (d > 1e-6) {
-          const hw = Math.hypot(j.a, j.c) * (w.rec.label.dimensions.width / 2);
-          const hh = Math.hypot(j.b, j.d) * (w.rec.label.dimensions.height / 2);
+          const hw = Math.hypot(j.a, j.c) * (w.size.width / 2);
+          const hh = Math.hypot(j.b, j.d) * (w.size.height / 2);
           const ux = vx / d, uy = vy / d;
           const border = Math.min(Math.abs(ux) > 1e-9 ? hw / Math.abs(ux) : Infinity, Math.abs(uy) > 1e-9 ? hh / Math.abs(uy) : Infinity);
           const excess = d - (cfg.leaderLengthPx + border);
@@ -1177,7 +1249,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       anchor: w.anchor,
       labelCenter: w.pos,
       frame: w.frame,
-      size: w.rec.label.dimensions,
+      size: w.size,
     });
     const proj = pts.map((p) => projectPoint(view, p));
     if (!proj.every((p) => p.inFront)) return null;
@@ -1289,7 +1361,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       let occ = 0;
       for (let i = 0; i < work.length; i++) {
         const w = work[i] as Work;
-        const pb = projectBillboard(view, w.pos, w.frame, w.rec.label.dimensions);
+        const pb = projectBillboard(view, w.pos, w.frame, w.size);
         if (pb.valid) index.insert(i, inflate(pb.rect, -tol / 2));
         if (!pb.valid || !rectInside(pb.rect, view.bounds, 1)) {
           out++;
@@ -1359,6 +1431,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
         occluded: ev.occluded.has(id),
         colliding: ev.colliding.has(id),
       };
+      if (rec.size) p.dimensions = { ...rec.size };
       if (reason !== undefined) p.hiddenReason = reason;
       out.push(p);
     }
@@ -1368,7 +1441,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
   private densityImpossible(work: Work[], ref: ResolvedView): boolean {
     let area = 0;
     for (const w of work) {
-      const pb = projectBillboard(ref, w.pos, w.frame, w.rec.label.dimensions);
+      const pb = projectBillboard(ref, w.pos, w.frame, w.size);
       if (pb.valid) area += (pb.rect.maxX - pb.rect.minX + this.config.paddingPx) * (pb.rect.maxY - pb.rect.minY + this.config.paddingPx);
     }
     const m = this.config.viewportMarginPx * 2;

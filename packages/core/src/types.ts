@@ -40,11 +40,23 @@ export interface LabelAnchor {
   barycentric?: Barycentric;
 }
 
-/** Size of a billboard in world units, after the billboard scale factor is applied. */
+/**
+ * Size of a billboard: world units after the billboard scale factor is applied,
+ * or pixels when the label's `sizing` is "screen".
+ */
 export interface LabelDimensions {
   width: number;
   height: number;
 }
+
+/**
+ * Unit of a label's `dimensions`.
+ * - "world" (default): world units. The label shrinks on screen as the camera moves away.
+ * - "screen": pixels of the view. The label keeps its size on screen whatever its
+ *   distance, and between two solves it keeps its place on screen relative to its
+ *   pin. Meant for maps, globes and other scenes whose camera distance varies widely.
+ */
+export type LabelSizing = "world" | "screen";
 
 export interface SpatialLabel {
   id: string;
@@ -53,6 +65,8 @@ export interface SpatialLabel {
   /** World position. On `addLabel` it is used as warm start only when `initialization` is "provided". */
   position: Vec3;
   dimensions: LabelDimensions;
+  /** Extension: unit of `dimensions` (default "world"). */
+  sizing?: LabelSizing;
   /** Higher priority labels move less and are hidden last. */
   priority: number;
   /** User visibility toggle. Hidden labels do not take part in collisions. */
@@ -115,6 +129,7 @@ export type HiddenReason =
   | "user-hidden"
   | "missing-anchor"
   | "anchor-behind-camera"
+  | "anchor-out-of-view"
   | "decluttered"
   | "out-of-view";
 
@@ -126,6 +141,8 @@ export interface LabelPlacement {
   anchorId?: string;
   /** Extension: world position of the anchor used for this solve. */
   anchorPosition?: Vec3 | null;
+  /** Extension: world size the label was solved with (differs from the label's dimensions for "screen" sizing). */
+  dimensions?: LabelDimensions;
   /** Extension: why the label is not visible. */
   hiddenReason?: HiddenReason;
   /** Extension: label center occluded in at least one view. */

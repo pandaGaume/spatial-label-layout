@@ -73,10 +73,35 @@ describe("leader routing", () => {
   });
 
   it("routes elbows through a horizontal stub to the facing edge", () => {
-    const pts = new ElbowRouter().route({ leader, anchor: { x: 5, y: -3, z: 0 }, labelCenter: { x: 0, y: 0, z: 0 }, frame, size });
+    const pts = new ElbowRouter({ shape: "diagonal" }).route({ leader, anchor: { x: 5, y: -3, z: 0 }, labelCenter: { x: 0, y: 0, z: 0 }, frame, size });
     expect(pts).toHaveLength(3);
     expect(pts[2]).toEqual({ x: 1, y: 0, z: 0 });
     expect(pts[1]?.y).toBeCloseTo(0);
+  });
+
+  it("routes orthogonal elbows by default: horizontal from the pin, vertical, horizontal into the label", () => {
+    const anchor = { x: 5, y: -3, z: 0 };
+    const pts = new ElbowRouter().route({ leader, anchor, labelCenter: { x: 0, y: 0, z: 0 }, frame, size });
+    // Pin, corner level with the pin, turn level with the label, middle of the facing edge.
+    expect(pts).toEqual([anchor, { x: 1.5, y: -3, z: 0 }, { x: 1.5, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }]);
+    // Mirrored for a pin on the other side.
+    const left = new ElbowRouter().route({ leader, anchor: { x: -5, y: 2, z: 0 }, labelCenter: { x: 0, y: 0, z: 0 }, frame, size });
+    expect(left).toEqual([{ x: -5, y: 2, z: 0 }, { x: -1.5, y: 2, z: 0 }, { x: -1.5, y: 0, z: 0 }, { x: -1, y: 0, z: 0 }]);
+  });
+
+  it("keeps the turn of an elbow between the pin and the label, and drops it when it is not needed", () => {
+    const router = new ElbowRouter();
+    // A pin closer to the label than the stub is long: the turn stands halfway.
+    const close = router.route({ leader, anchor: { x: 1.2, y: -3, z: 0 }, labelCenter: { x: 0, y: 0, z: 0 }, frame, size });
+    expect(close[1]?.x).toBeCloseTo(1.1);
+    expect(close[2]?.x).toBeCloseTo(1.1);
+    // A pin level with the label: a single horizontal segment.
+    expect(router.route({ leader, anchor: { x: 5, y: 0, z: 0 }, labelCenter: { x: 0, y: 0, z: 0 }, frame, size })).toEqual([
+      { x: 5, y: 0, z: 0 },
+      { x: 1, y: 0, z: 0 },
+    ]);
+    // A pin under the label: straight to its border.
+    expect(router.route({ leader, anchor: { x: 0.5, y: -4, z: 0 }, labelCenter: { x: 0, y: 0, z: 0 }, frame, size })).toHaveLength(2);
   });
 
   it("dispatches by routing kind and falls back to straight", () => {

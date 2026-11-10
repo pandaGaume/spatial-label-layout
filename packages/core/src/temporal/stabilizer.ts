@@ -9,6 +9,14 @@ export interface TemporalConfig {
   translationThreshold: number;
   /** Anchor displacement (world units) that marks the layout dirty. */
   anchorMoveThreshold: number;
+  /**
+   * Scale-free alternative to the three thresholds above, which are in world
+   * units and radians. When set, the layout is re-solved once a pin moved more
+   * than this many pixels on screen since the last solve, whatever the cause
+   * (camera or pin), and the world thresholds are ignored. Use it for scenes
+   * whose scale varies (maps, globes) and with "screen" sized labels.
+   */
+  screenThresholdPx?: number;
   /** Above this angular speed (rad/s) the layout is frozen ("fast camera" policy). */
   fastAngularSpeed: number;
   /** Maximum time (s) the layout can stay frozen during fast camera motion. */
@@ -66,7 +74,16 @@ export class TemporalStabilizer {
     this.config = config;
   }
 
-  decide(ref: ResolvedView, deltaTime: number, dirty: boolean, force: boolean, pendingReorganization = false): TemporalDecision {
+  /** Reference view of the last solve, or null before the first one. */
+  get solvedView(): ResolvedView | null {
+    return this.lastSolved;
+  }
+
+  /**
+   * @param screenMotionPx Largest on-screen displacement of a pin since the last solve; given when
+   * `screenThresholdPx` is set, it replaces the angular and translation tests.
+   */
+  decide(ref: ResolvedView, deltaTime: number, dirty: boolean, force: boolean, pendingReorganization = false, screenMotionPx?: number): TemporalDecision {
     const previousFrame = this.lastFrame;
     this.lastFrame = ref;
     if (force) return { solve: true, reason: "forced" };
@@ -82,9 +99,13 @@ export class TemporalStabilizer {
       }
     }
     if (dirty) return { solve: true, reason: "dirty" };
-    const d = viewDelta(this.lastSolved, ref);
-    if (d.angle > this.config.angularThreshold || d.translation > this.config.translationThreshold) {
-      return { solve: true, reason: "camera-moved" };
+    if (screenMotionPx !== undefined) {
+      if (screenMotionPx > (this.config.screenThresholdPx ?? 0)) return { solve: true, reason: "camera-moved" };
+    } else {
+      const d = viewDelta(this.lastSolved, ref);
+      if (d.angle > this.config.angularThreshold || d.translation > this.config.translationThreshold) {
+        return { solve: true, reason: "camera-moved" };
+      }
     }
     if (pendingReorganization) return { solve: true, reason: "pending-reorganization" };
     return { solve: false, reason: "below-threshold" };

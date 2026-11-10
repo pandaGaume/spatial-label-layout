@@ -1,5 +1,5 @@
 import { transformPoint, type ReadonlyMat4 } from "../geometry/mat4.js";
-import { isFiniteVec3 } from "../geometry/vec3.js";
+import { clone, isFiniteVec3 } from "../geometry/vec3.js";
 import type { LabelAnchor, Vec3 } from "../types.js";
 
 /**
@@ -39,7 +39,7 @@ export class TransformAnchorProvider implements AnchorProvider {
   constructor(private readonly meshes: MeshResolver) {}
 
   resolve(anchor: LabelAnchor): Vec3 | null {
-    if (anchor.meshId === undefined) return isFiniteVec3(anchor.localPosition) ? { ...anchor.localPosition } : null;
+    if (anchor.meshId === undefined) return isFiniteVec3(anchor.localPosition) ? clone(anchor.localPosition) : null;
     const world = this.meshes.getWorldMatrix(anchor.meshId);
     if (!world) return null;
     let local = anchor.localPosition;
@@ -61,7 +61,7 @@ export class StaticAnchorProvider implements AnchorProvider {
   private readonly positions = new Map<string, Vec3>();
 
   set(id: string, p: Vec3): void {
-    this.positions.set(id, { ...p });
+    this.positions.set(id, clone(p));
   }
 
   delete(id: string): void {
@@ -69,7 +69,7 @@ export class StaticAnchorProvider implements AnchorProvider {
   }
 
   resolve(anchor: LabelAnchor): Vec3 | null {
-    return this.positions.get(anchor.id) ?? (anchor.meshId === undefined ? { ...anchor.localPosition } : null);
+    return this.positions.get(anchor.id) ?? (anchor.meshId === undefined ? clone(anchor.localPosition) : null);
   }
 }
 

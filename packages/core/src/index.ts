@@ -7,6 +7,7 @@ export * from "./geometry/segment2.js";
 export type { Mat4, ReadonlyMat4 } from "./geometry/mat4.js";
 
 export * from "./projection/view.js";
+export * from "./projection/screen.js";
 export * from "./projection/camera-factory.js";
 
 export * from "./billboard/orienter.js";

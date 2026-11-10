@@ -37,6 +37,13 @@ export interface DepthConfig {
 /** Brief section 10: pin behind the camera. */
 export type BehindCameraPolicy = "hide" | "reposition" | "keep";
 
+/**
+ * Labels whose pin is outside every view.
+ * - "keep" (default): laid out anyway; with `keepInViewport` the label stays on screen with a leader running off it.
+ * - "hide": hidden with reason "anchor-out-of-view", and back as soon as the pin returns.
+ */
+export type AnchorOutOfViewPolicy = "keep" | "hide";
+
 export type InitializationMode = "candidates" | "provided";
 
 export interface SolverConfig {
@@ -62,6 +69,9 @@ export interface SolverConfig {
   weights: LayoutWeights;
   depth: DepthConfig;
   behindCamera: BehindCameraPolicy;
+  anchorOutOfView: AnchorOutOfViewPolicy;
+  /** Distance outside the viewport (pixels) at which a pin still counts as in view for `anchorOutOfView`. */
+  anchorViewMarginPx: number;
   initialization: InitializationMode;
   /** Preferred distance between anchor and the label edge (pixels). */
   leaderLengthPx: number;
@@ -108,6 +118,8 @@ export const defaultSolverConfig = (): SolverConfig => ({
   weights: { overlap: 1, crossing: 0.5, motion: 0.3, occlusion: 1, depth: 0.2, anchorPull: 0.3 },
   depth: { mode: "surface-relative", surfaceOffset: 0, comfortRange: { min: 0.75, max: 5 } },
   behindCamera: "hide",
+  anchorOutOfView: "keep",
+  anchorViewMarginPx: 0,
   initialization: "candidates",
   leaderLengthPx: 24,
   minimizeCrossings: true,

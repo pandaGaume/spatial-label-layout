@@ -1,6 +1,7 @@
 import type { AnchorProvider } from "../anchors/anchor-provider.js";
-import { resolveView } from "../projection/view.js";
-import { DampedInterpolator, type PlacementInterpolator } from "../temporal/interpolator.js";
+import { resolveLabelSize } from "../projection/screen.js";
+import { InvalidViewError, resolveView, type ResolvedView } from "../projection/view.js";
+import { ScreenLockedInterpolator, type PlacementInterpolator } from "../temporal/interpolator.js";
 import { FixedRateScheduler, type SolveScheduler } from "../temporal/scheduler.js";
 import { SpatialLabelLayoutEngine, type EngineOptions } from "../solver/engine.js";
 import type { LabelAnchor, LayoutResult, SpatialLabel } from "../types.js";
@@ -16,7 +17,10 @@ export interface LabelLayoutControllerOptions {
   leaderRenderer?: LeaderRenderer;
   /** Solver cadence (default 10 Hz, decoupled from rendering). */
   scheduler?: SolveScheduler;
-  /** Render-rate smoothing (default: damped, 80 ms half-life). */
+  /**
+   * Render-rate smoothing (default: `ScreenLockedInterpolator`, 80 ms half-life: damped in
+   * world space, and in pixels from the pin for labels with "screen" sizing).
+   */
   interpolator?: PlacementInterpolator;
   onSolve?: (result: LayoutResult) => void;
 }
@@ -41,6 +45,7 @@ export class LabelLayoutController {
   private readonly visibility = new Map<string, boolean>();
   private frameVersion: number | undefined;
   private lastResult: LayoutResult | null = null;
+  private referenceView: ResolvedView | null = null;
   private disposed = false;
 
   constructor(options: LabelLayoutControllerOptions) {
@@ -50,13 +55,21 @@ export class LabelLayoutController {
     this.labelRenderer = options.labelRenderer;
     this.leaderRenderer = options.leaderRenderer;
     this.scheduler = options.scheduler ?? new FixedRateScheduler(10);
-    this.interpolator = options.interpolator ?? new DampedInterpolator();
+    this.interpolator = options.interpolator ?? new ScreenLockedInterpolator();
     this.onSolve = options.onSolve;
     this.frameVersion = this.camera.referenceFrameVersion;
   }
 
   get result(): LayoutResult | null {
     return this.lastResult;
+  }
+
+  /**
+   * Reference view of the last `tick`, resolved; null before the first one or when the camera gave an
+   * invalid view. Adapters use it to size what they draw themselves (pins, leader widths in pixels...).
+   */
+  get view(): ResolvedView | null {
+    return this.referenceView;
   }
 
   addAnchor(anchor: LabelAnchor): void {
@@ -116,40 +129,63 @@ export class LabelLayoutController {
     const reference = this.camera.getReferenceView?.();
     if (views.length === 0) return;
 
+    let ref: ResolvedView | null = null;
+    try {
+      ref = resolveView(reference ?? (views[0] as NonNullable<typeof reference>), -1);
+    } catch (e) {
+      // The engine reports the invalid view in its diagnostics; nothing can be drawn through it.
+      if (!(e instanceof InvalidViewError)) throw e;
+    }
+    this.referenceView = ref;
+    if (ref) {
+      this.interpolator.beginFrame?.({
+        view: ref,
+        anchorOf: (id) => {
+          const label = this.engine.getLabel(id);
+          return label ? this.engine.getAnchorPosition(label.anchorId) : null;
+        },
+        screenLocked: (id) => this.engine.getLabel(id)?.sizing === "screen",
+      });
+    }
+
     if (this.scheduler.shouldSolve(deltaTime)) {
       const ctx = reference
         ? { views, deltaTime: this.scheduler.elapsedSinceSolve, referenceView: reference }
         : { views, deltaTime: this.scheduler.elapsedSinceSolve };
       const result = this.engine.solve(ctx);
       this.lastResult = result;
+      // A skipped solve repeats positions computed for an earlier view: its targets are known already.
+      const fresh = result.diagnostics?.skipped !== true;
       for (const p of result.placements) {
         this.visibility.set(p.id, p.visible);
-        if (p.visible) this.interpolator.setTarget(p.id, p.position);
+        if (p.visible && fresh) this.interpolator.setTarget(p.id, p.position);
       }
       this.onSolve?.(result);
     }
     this.interpolator.step(deltaTime);
-    this.render(reference ?? (views[0] as NonNullable<typeof reference>));
+    if (ref) this.render(ref);
   }
 
-  private render(referenceView: NonNullable<ReturnType<NonNullable<CameraProvider["getReferenceView"]>>>): void {
+  private render(ref: ResolvedView): void {
     if (!this.labelRenderer && !this.leaderRenderer) return;
-    const ref = resolveView(referenceView, -1);
     const orienter = this.engine.settings.orienter;
     const routers = this.engine.leaderRouters;
     for (const label of this.engine.getLabels()) {
-      const visible = this.visibility.get(label.id) ?? false;
+      const anchor = this.engine.getAnchorPosition(label.anchorId);
       const position = this.interpolator.get(label.id) ?? label.position;
+      // "screen" sizing: the world size follows the view of every frame, not only of every solve.
+      const resolved = resolveLabelSize(label, ref, anchor ?? position);
+      const size = resolved ?? label.dimensions;
+      const visible = (this.visibility.get(label.id) ?? false) && resolved !== null;
       const frame = orienter.frame(position, ref);
       this.labelRenderer?.updateLabel(
         label.id,
-        { position, right: frame.right, up: frame.up, normal: frame.normal, width: label.dimensions.width, height: label.dimensions.height },
+        { position, right: frame.right, up: frame.up, normal: frame.normal, width: size.width, height: size.height },
         visible,
       );
       const leader = this.engine.getLeader(label.id);
-      const anchor = this.engine.getAnchorPosition(label.anchorId);
       if (leader && this.leaderRenderer) {
-        const points = anchor ? routers.route({ leader, anchor, labelCenter: position, frame, size: label.dimensions }) : [];
+        const points = anchor ? routers.route({ leader, anchor, labelCenter: position, frame, size }) : [];
         this.leaderRenderer.updateLeader(leader.id, points, visible && anchor !== null);
       }
     }

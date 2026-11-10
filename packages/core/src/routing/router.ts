@@ -1,4 +1,4 @@
-import { addScaled, dot, sub } from "../geometry/vec3.js";
+import { addScaled, clone, dot, sub } from "../geometry/vec3.js";
 import type { BillboardFrame } from "../billboard/orienter.js";
 import type { LabelDimensions, LabelLeader, LeaderRouting, Vec3 } from "../types.js";
 
@@ -43,31 +43,50 @@ export class StraightRouter implements LeaderRouter {
   readonly kind = "straight";
   constructor(private readonly attach: AttachMode = "border") {}
   route(input: LeaderRouteInput): Vec3[] {
-    const end = this.attach === "center" ? { ...input.labelCenter } : borderAttachPoint(input);
-    return [{ ...input.anchor }, end];
+    const end = this.attach === "center" ? clone(input.labelCenter) : borderAttachPoint(input);
+    return [clone(input.anchor), end];
   }
 }
 
 export interface ElbowRouterOptions {
   /** Length of the horizontal stub, as a fraction of the label width (default 0.25). */
   stubFraction?: number;
+  /**
+   * - "orthogonal" (default, brief section 9): the leader leaves the pin along the label's
+   *   horizontal, turns along its vertical, and enters the label through a horizontal stub.
+   * - "diagonal": a straight run from the pin to the stub.
+   */
+  shape?: "orthogonal" | "diagonal";
 }
 
-/** Anchor -> elbow -> midpoint of the label's left or right edge (whichever faces the anchor). */
+/**
+ * Pin -> elbow -> midpoint of the label's left or right edge (whichever faces the pin).
+ * A pin standing above or below the label gets a straight leader to its border.
+ */
 export class ElbowRouter implements LeaderRouter {
   readonly kind = "elbow";
   private readonly stubFraction: number;
+  private readonly orthogonal: boolean;
   constructor(options: ElbowRouterOptions = {}) {
     this.stubFraction = options.stubFraction ?? 0.25;
+    this.orthogonal = (options.shape ?? "orthogonal") === "orthogonal";
   }
   route(input: LeaderRouteInput): Vec3[] {
     const { anchor, labelCenter: c, frame, size } = input;
-    const u = dot(sub(anchor, c), frame.right);
+    const d = sub(anchor, c);
+    const u = dot(d, frame.right);
     const side = u >= 0 ? 1 : -1;
     const attach = addScaled(c, frame.right, (side * size.width) / 2);
-    if (Math.abs(u) <= size.width / 2) return [{ ...anchor }, borderAttachPoint(input)];
-    const elbow = addScaled(attach, frame.right, side * size.width * this.stubFraction);
-    return [{ ...anchor }, elbow, attach];
+    const gap = Math.abs(u) - size.width / 2;
+    if (gap <= 0) return [clone(anchor), borderAttachPoint(input)];
+    if (!this.orthogonal) return [clone(anchor), addScaled(attach, frame.right, side * size.width * this.stubFraction), attach];
+    // The turn stands between the pin and the label, at most one stub away from the label.
+    const elbow = addScaled(attach, frame.right, side * Math.min(size.width * this.stubFraction, gap / 2));
+    const v = dot(d, frame.up);
+    // A pin level with the middle of the label needs no turn.
+    if (Math.abs(v) < 1e-9 * Math.max(1, size.height)) return [clone(anchor), attach];
+    // The corner lies in the plane of the label, level with the pin: the run from it to the stub is vertical.
+    return [clone(anchor), addScaled(elbow, frame.up, v), elbow, attach];
   }
 }
 
@@ -79,7 +98,7 @@ export class PolylineRouter implements LeaderRouter {
   readonly kind = "polyline";
   constructor(private readonly viaPoints: (input: LeaderRouteInput) => readonly Vec3[] = () => []) {}
   route(input: LeaderRouteInput): Vec3[] {
-    return [{ ...input.anchor }, ...this.viaPoints(input).map((p) => ({ ...p })), borderAttachPoint(input)];
+    return [clone(input.anchor), ...this.viaPoints(input).map(clone), borderAttachPoint(input)];
   }
 }
 
