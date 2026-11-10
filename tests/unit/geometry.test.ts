@@ -8,7 +8,7 @@ import {
   segmentsCross,
   UniformGridIndex,
   type Rect2,
-} from "@spatial-label-layout/core";
+} from "@spacexr/spatial-label-layout-core";
 import { rng } from "../helpers/scene.js";
 
 describe("rect2", () => {

@@ -1,4 +1,4 @@
-import type { LabelSnapshot, ViewSnapshot } from "@spatial-label-layout/core";
+import type { LabelSnapshot, ViewSnapshot } from "@spacexr/spatial-label-layout-core";
 
 export interface SvgOptions {
   /** Draw hidden labels as dashed outlines (default true). */

@@ -6,9 +6,9 @@ const r = (p: string): string => fileURLToPath(new URL(p, import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      "@spatial-label-layout/core": r("./packages/core/src/index.ts"),
-      "@spatial-label-layout/debug": r("./packages/debug/src/index.ts"),
-      "@spatial-label-layout/babylon": r("./packages/babylon/src/index.ts"),
+      "@spacexr/spatial-label-layout-core": r("./packages/core/src/index.ts"),
+      "@spacexr/spatial-label-layout-debug": r("./packages/debug/src/index.ts"),
+      "@spacexr/spatial-label-layout-babylon": r("./packages/babylon/src/index.ts"),
     },
   },
   test: {

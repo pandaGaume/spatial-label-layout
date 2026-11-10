@@ -6,7 +6,7 @@ import {
   PriorityDeclutter,
   resolveView,
   TemporalStabilizer,
-} from "@spatial-label-layout/core";
+} from "@spacexr/spatial-label-layout-core";
 import { monoView, orbit } from "../helpers/scene.js";
 
 describe("FixedRateScheduler", () => {

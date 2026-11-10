@@ -7,7 +7,7 @@ import {
   Mat4Math,
   type LayoutContext,
   type LayoutObserver,
-} from "@spatial-label-layout/core";
+} from "@spacexr/spatial-label-layout-core";
 import { makeLabel, monoView, orbit, randomScene } from "../helpers/scene.js";
 
 const ctx = (view = monoView()): LayoutContext => ({ views: [view], deltaTime: 0.1 });

@@ -15,8 +15,8 @@ import {
   type PlacementInterpolator,
   type SolveScheduler,
   type Vec3,
-} from "@spatial-label-layout/core";
-import { RecordingLabelRenderer, RecordingLeaderRenderer } from "@spatial-label-layout/debug";
+} from "@spacexr/spatial-label-layout-core";
+import { RecordingLabelRenderer, RecordingLeaderRenderer } from "@spacexr/spatial-label-layout-debug";
 import { makeLabel, monoView } from "../helpers/scene.js";
 
 const ORIGIN = { x: 0, y: 0, z: 0 };

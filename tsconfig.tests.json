@@ -12,9 +12,9 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@spatial-label-layout/core": ["packages/core/src/index.ts"],
-      "@spatial-label-layout/debug": ["packages/debug/src/index.ts"],
-      "@spatial-label-layout/babylon": ["packages/babylon/src/index.ts"]
+      "@spacexr/spatial-label-layout-core": ["packages/core/src/index.ts"],
+      "@spacexr/spatial-label-layout-debug": ["packages/debug/src/index.ts"],
+      "@spacexr/spatial-label-layout-babylon": ["packages/babylon/src/index.ts"]
     }
   },
   "include": ["tests/**/*.ts", "benchmarks/**/*.ts", "examples/**/*.ts", "vitest.config.ts"]

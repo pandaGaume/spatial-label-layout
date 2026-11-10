@@ -3,8 +3,8 @@
  * anchors in world space, one solve, a debug SVG of the result.
  *   pnpm example:basic
  */
-import { SpatialLabelLayoutEngine, createCameraView } from "@spatial-label-layout/core";
-import { formatResult, renderViewSvg } from "@spatial-label-layout/debug";
+import { SpatialLabelLayoutEngine, createCameraView } from "@spacexr/spatial-label-layout-core";
+import { formatResult, renderViewSvg } from "@spacexr/spatial-label-layout-debug";
 import { writeOut } from "../shared.js";
 
 const engine = new SpatialLabelLayoutEngine();

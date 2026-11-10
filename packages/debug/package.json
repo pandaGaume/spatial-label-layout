@@ -1,7 +1,16 @@
 {
-  "name": "@spatial-label-layout/debug",
+  "name": "@spacexr/spatial-label-layout-debug",
   "version": "0.1.0",
   "description": "Renderer-agnostic diagnostics: SVG snapshots, metrics recorder, recording ports.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pandaGaume/spatial-label-layout.git",
+    "directory": "packages/debug"
+  },
+  "homepage": "https://github.com/pandaGaume/spatial-label-layout#readme",
+  "bugs": {
+    "url": "https://github.com/pandaGaume/spatial-label-layout/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,11 +22,15 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo"
   ],
   "sideEffects": false,
   "dependencies": {
-    "@spatial-label-layout/core": "workspace:*"
+    "@spacexr/spatial-label-layout-core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "UNLICENSED"
 }

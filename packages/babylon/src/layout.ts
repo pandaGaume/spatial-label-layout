@@ -6,7 +6,7 @@ import {
   type LabelLayoutControllerOptions,
   type ResolvedView,
   type SpatialLabelLayoutEngine,
-} from "@spatial-label-layout/core";
+} from "@spacexr/spatial-label-layout-core";
 import { BabylonCameraProvider, type PixelUnit } from "./camera.js";
 import { BabylonLabelRenderer, type BabylonLabelRendererOptions } from "./label-renderer.js";
 import { BabylonLeaderRenderer, type BabylonLeaderRendererOptions } from "./leader-renderer.js";

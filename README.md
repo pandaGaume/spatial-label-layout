@@ -6,9 +6,9 @@ This repository implements the *Spatial Label Layout v1.0* brief up to milestone
 
 | Package | Contents |
 |---|---|
-| `@spatial-label-layout/core` | math, solver, public API, integration ports. No dependencies. |
-| `@spatial-label-layout/debug` | SVG snapshots, metrics recorder, in-memory renderers that double as reference adapters |
-| `@spatial-label-layout/babylon` | Babylon.js adapter: camera views, renderers that place the application's own 3D label objects and their leaders, render loop hook. Peer dependency on `@babylonjs/core` 9. |
+| `@spacexr/spatial-label-layout-core` | math, solver, public API, integration ports. No dependencies. |
+| `@spacexr/spatial-label-layout-debug` | SVG snapshots, metrics recorder, in-memory renderers that double as reference adapters |
+| `@spacexr/spatial-label-layout-babylon` | Babylon.js adapter: camera views, renderers that place the application's own 3D label objects and their leaders, render loop hook. Peer dependency on `@babylonjs/core` 9. |
 
 ## Getting started
 
@@ -23,7 +23,7 @@ corepack pnpm example:basic
 Using the engine directly:
 
 ```ts
-import { SpatialLabelLayoutEngine, createCameraView } from "@spatial-label-layout/core";
+import { SpatialLabelLayoutEngine, createCameraView } from "@spacexr/spatial-label-layout-core";
 
 const engine = new SpatialLabelLayoutEngine();
 engine.setAnchorPosition("summit", { x: 0, y: 2, z: 0 });
@@ -48,7 +48,7 @@ renderLoop((dt) => controller.tick(dt));
 With Babylon.js, `BabylonLabelLayout` wires the controller to a scene. The labels are 3D objects the application builds itself; the adapter places, orients and scales them:
 
 ```ts
-import { BabylonLabelLayout } from "@spatial-label-layout/babylon";
+import { BabylonLabelLayout } from "@spacexr/spatial-label-layout-babylon";
 
 const layout = new BabylonLabelLayout({
   scene,
@@ -100,6 +100,26 @@ Coordinate conventions (column-major matrices, any handedness, pixels with y dow
 | `pnpm bench` | Vitest micro-benchmarks |
 | `pnpm bench:budget` | brief §11 budgets, worst case and realistic XR loop |
 | `pnpm example:basic`, `example:dense`, `example:terrain`, `example:webxr` | Node examples; SVG output in `examples/*/out/` |
+
+## Releasing
+
+The three packages are published to npm under the `@spacexr` organization, at the same version, by [.github/workflows/release.yaml](.github/workflows/release.yaml) when a tag `vX.Y.Z` is pushed. The workflow checks that the tag carries the version of every `packages/*/package.json`, runs the type check and the tests, packs with pnpm (which replaces the `workspace:` ranges by real versions) and publishes the tarballs with npm.
+
+```bash
+corepack pnpm -r exec npm version 0.2.0 --no-git-tag-version   # the three packages
+git commit -am "Release 0.2.0"
+git tag v0.2.0
+git push origin main
+git push origin v0.2.0
+```
+
+The workflow publishes through npm trusted publishing (OIDC), with no token. A package must exist on npm before a trusted publisher can be set on it, so the first version is published by hand, from the root:
+
+```bash
+corepack pnpm -r publish --access public
+```
+
+Then, on npmjs.com, each of the three packages gets this repository and `release.yaml` as its trusted publisher.
 
 ## Performance
 

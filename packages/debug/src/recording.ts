@@ -5,7 +5,7 @@ import type {
   LeaderRenderer,
   SpatialLabel,
   Vec3,
-} from "@spatial-label-layout/core";
+} from "@spacexr/spatial-label-layout-core";
 
 /**
  * In-memory implementations of the rendering ports. They double as the

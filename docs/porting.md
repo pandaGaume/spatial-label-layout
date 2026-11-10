@@ -16,7 +16,7 @@ The core knows nothing about engines. An adapter for Babylon.js, three.js, PlayC
 
 If `TransformAnchorProvider` (world matrix plus barycentric interpolation) is not enough, implement `AnchorProvider` directly.
 
-`RecordingLabelRenderer` and `RecordingLeaderRenderer` in `@spatial-label-layout/debug` are the reference implementations. A real adapter does the same work with meshes instead of maps.
+`RecordingLabelRenderer` and `RecordingLeaderRenderer` in `@spacexr/spatial-label-layout-debug` are the reference implementations. A real adapter does the same work with meshes instead of maps.
 
 ## Extension points
 
@@ -43,7 +43,7 @@ Use the controller's orientation. `BillboardTransform` carries `right`, `up` and
 
 ## Babylon.js
 
-The adapter is the package `@spatial-label-layout/babylon`:
+The adapter is the package `@spacexr/spatial-label-layout-babylon`:
 
 | Class | Port | Notes |
 |---|---|---|
@@ -58,7 +58,7 @@ The sketch below is what the package does, kept as a guide for other engines.
 
 
 ```ts
-import { LabelLayoutController, FixedRateScheduler, TransformAnchorProvider, type CameraProvider, type CameraView } from "@spatial-label-layout/core";
+import { LabelLayoutController, FixedRateScheduler, TransformAnchorProvider, type CameraProvider, type CameraView } from "@spacexr/spatial-label-layout-core";
 
 const meshes = new TransformAnchorProvider({
   getWorldMatrix: (id) => scene.getMeshById(id)?.computeWorldMatrix(false).m ?? null,

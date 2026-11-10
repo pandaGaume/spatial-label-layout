@@ -1,7 +1,16 @@
 {
-  "name": "@spatial-label-layout/babylon",
+  "name": "@spacexr/spatial-label-layout-babylon",
   "version": "0.1.0",
   "description": "Babylon.js adapter for spatial label layout: camera views, renderers that place the application's own 3D label objects and their leaders, render loop hook.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pandaGaume/spatial-label-layout.git",
+    "directory": "packages/babylon"
+  },
+  "homepage": "https://github.com/pandaGaume/spatial-label-layout#readme",
+  "bugs": {
+    "url": "https://github.com/pandaGaume/spatial-label-layout/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,16 +22,20 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo"
   ],
   "sideEffects": false,
   "peerDependencies": {
     "@babylonjs/core": "^9.0.0",
-    "@spatial-label-layout/core": "^0.1.0"
+    "@spacexr/spatial-label-layout-core": "^0.1.0"
   },
   "devDependencies": {
     "@babylonjs/core": "9.33.1",
-    "@spatial-label-layout/core": "workspace:*"
+    "@spacexr/spatial-label-layout-core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "UNLICENSED"
 }

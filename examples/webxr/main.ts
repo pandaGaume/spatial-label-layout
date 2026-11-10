@@ -6,8 +6,8 @@
  * and `view.projectionMatrix`).
  *   pnpm example:webxr
  */
-import { FixedRateScheduler, LabelLayoutController, StaticCameraProvider, createStereoViews } from "@spatial-label-layout/core";
-import { MetricsRecorder, RecordingLabelRenderer, RecordingLeaderRenderer, formatSummary, renderViewSvg } from "@spatial-label-layout/debug";
+import { FixedRateScheduler, LabelLayoutController, StaticCameraProvider, createStereoViews } from "@spacexr/spatial-label-layout-core";
+import { MetricsRecorder, RecordingLabelRenderer, RecordingLeaderRenderer, formatSummary, renderViewSvg } from "@spacexr/spatial-label-layout-debug";
 import { rng, writeOut } from "../shared.js";
 
 const VIEWPORT = { width: 1680, height: 1760 }; // Quest-3-like per-eye resolution

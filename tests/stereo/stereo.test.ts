@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SpatialLabelLayoutEngine } from "@spatial-label-layout/core";
+import { SpatialLabelLayoutEngine } from "@spacexr/spatial-label-layout-core";
 import { makeLabel, randomScene, stereo } from "../helpers/scene.js";
 
 describe("stereo / WebXR validation", () => {

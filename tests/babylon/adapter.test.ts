@@ -13,8 +13,8 @@ import {
   worldUnitsPerPixel,
   type LeaderRouting,
   type ResolvedView,
-} from "@spatial-label-layout/core";
-import { BabylonCameraProvider, BabylonLabelLayout, type BabylonLabelNode } from "@spatial-label-layout/babylon";
+} from "@spacexr/spatial-label-layout-core";
+import { BabylonCameraProvider, BabylonLabelLayout, type BabylonLabelNode } from "@spacexr/spatial-label-layout-babylon";
 
 const WIDTH = 1280;
 const HEIGHT = 720;

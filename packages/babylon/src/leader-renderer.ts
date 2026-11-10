@@ -5,7 +5,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js"
 import { CreateCylinder } from "@babylonjs/core/Meshes/Builders/cylinderBuilder.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
-import { worldUnitsPerPixel, type LabelLeader, type LeaderRenderer, type ResolvedView, type Vec3 } from "@spatial-label-layout/core";
+import { worldUnitsPerPixel, type LabelLeader, type LeaderRenderer, type ResolvedView, type Vec3 } from "@spacexr/spatial-label-layout-core";
 
 export interface BabylonLeaderRendererOptions {
   /** Width of a leader (default 1.5), in the unit of `widthUnit`. */

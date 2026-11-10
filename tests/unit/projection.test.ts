@@ -8,7 +8,7 @@ import {
   resolveView,
   type DepthRange,
   type Handedness,
-} from "@spatial-label-layout/core";
+} from "@spacexr/spatial-label-layout-core";
 
 const VP = { width: 800, height: 600 };
 

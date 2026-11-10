@@ -5,8 +5,8 @@ import {
   Mat4Math,
   StaticCameraProvider,
   TransformAnchorProvider,
-} from "@spatial-label-layout/core";
-import { RecordingLabelRenderer, RecordingLeaderRenderer, renderViewSvg } from "@spatial-label-layout/debug";
+} from "@spacexr/spatial-label-layout-core";
+import { RecordingLabelRenderer, RecordingLeaderRenderer, renderViewSvg } from "@spacexr/spatial-label-layout-debug";
 import { makeLabel, monoView } from "../helpers/scene.js";
 
 const setup = () => {

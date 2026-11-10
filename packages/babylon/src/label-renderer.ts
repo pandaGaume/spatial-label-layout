@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
-import type { BillboardTransform, LabelRenderer, SpatialLabel } from "@spatial-label-layout/core";
+import type { BillboardTransform, LabelRenderer, SpatialLabel } from "@spacexr/spatial-label-layout-core";
 
 /**
  * What draws one label: a 3D object of the application, whatever it is made

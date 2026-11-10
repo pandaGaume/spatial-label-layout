@@ -1,6 +1,6 @@
 import type { Camera } from "@babylonjs/core/Cameras/camera.js";
 import type { Scene } from "@babylonjs/core/scene.js";
-import type { CameraProvider, CameraView } from "@spatial-label-layout/core";
+import type { CameraProvider, CameraView } from "@spacexr/spatial-label-layout-core";
 
 /**
  * Unit of the viewport handed to the solver, and therefore of every pixel

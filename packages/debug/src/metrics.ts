@@ -1,4 +1,4 @@
-import type { IterationStats, LayoutObserver, LayoutResult } from "@spatial-label-layout/core";
+import type { IterationStats, LayoutObserver, LayoutResult } from "@spacexr/spatial-label-layout-core";
 
 export interface MetricsSummary {
   solves: number;

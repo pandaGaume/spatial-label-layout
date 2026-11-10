@@ -12,8 +12,8 @@ import {
   StaticCameraProvider,
   TransformAnchorProvider,
   createCameraView,
-} from "@spatial-label-layout/core";
-import { MetricsRecorder, RecordingLabelRenderer, RecordingLeaderRenderer, formatSummary, renderViewSvg } from "@spatial-label-layout/debug";
+} from "@spacexr/spatial-label-layout-core";
+import { MetricsRecorder, RecordingLabelRenderer, RecordingLeaderRenderer, formatSummary, renderViewSvg } from "@spacexr/spatial-label-layout-debug";
 import { rng, terrainHeight, writeOut } from "../shared.js";
 
 const VIEWPORT = { width: 1600, height: 900 };

@@ -11,13 +11,13 @@ importers:
       '@babylonjs/core':
         specifier: 9.33.1
         version: 9.33.1
-      '@spatial-label-layout/babylon':
+      '@spacexr/spatial-label-layout-babylon':
         specifier: workspace:*
         version: link:packages/babylon
-      '@spatial-label-layout/core':
+      '@spacexr/spatial-label-layout-core':
         specifier: workspace:*
         version: link:packages/core
-      '@spatial-label-layout/debug':
+      '@spacexr/spatial-label-layout-debug':
         specifier: workspace:*
         version: link:packages/debug
       '@types/node':
@@ -38,7 +38,7 @@ importers:
       '@babylonjs/core':
         specifier: 9.33.1
         version: 9.33.1
-      '@spatial-label-layout/core':
+      '@spacexr/spatial-label-layout-core':
         specifier: workspace:*
         version: link:../core
 
@@ -46,7 +46,7 @@ importers:
 
   packages/debug:
     dependencies:
-      '@spatial-label-layout/core':
+      '@spacexr/spatial-label-layout-core':
         specifier: workspace:*
         version: link:../core
 

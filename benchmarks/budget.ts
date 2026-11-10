@@ -3,8 +3,8 @@
  * metrics over a 360 degree orbit, mono and stereo, 10 / 100 / 500 labels.
  * Run: pnpm bench:budget
  */
-import { FixedRateScheduler, LabelLayoutController } from "@spatial-label-layout/core";
-import { MetricsRecorder } from "@spatial-label-layout/debug";
+import { FixedRateScheduler, LabelLayoutController } from "@spacexr/spatial-label-layout-core";
+import { MetricsRecorder } from "@spacexr/spatial-label-layout-debug";
 import { buildScene, orbitStereo, orbitView } from "./scenes.js";
 
 const TARGET_MS: Record<number, number> = { 100: 5, 500: 15 };

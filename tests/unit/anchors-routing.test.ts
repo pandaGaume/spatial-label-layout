@@ -12,7 +12,7 @@ import {
   resolveView,
   type MeshResolver,
   type Vec3,
-} from "@spatial-label-layout/core";
+} from "@spacexr/spatial-label-layout-core";
 
 describe("TransformAnchorProvider", () => {
   const tri: [Vec3, Vec3, Vec3] = [

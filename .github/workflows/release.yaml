@@ -1,0 +1,68 @@
+name: release
+
+# Publishes the three packages to npm when a version tag is pushed:
+#   git tag v0.2.0 && git push origin v0.2.0
+# The tag must carry the version written in every packages/*/package.json.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # OIDC token for npm trusted publishing and provenance.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          registry-url: https://registry.npmjs.org
+
+      - name: Check that the tag matches the package versions
+        run: |
+          for manifest in packages/*/package.json; do
+            version=$(node -p "require('./$manifest').version")
+            if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+              echo "::error::$manifest is at $version, the tag is $GITHUB_REF_NAME"
+              exit 1
+            fi
+          done
+
+      # pnpm comes from the `packageManager` field of package.json.
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      # Builds the packages (tsc -b), then type-checks tests, benchmarks and examples.
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # pnpm writes the tarballs: it replaces the `workspace:` ranges by the real
+      # versions, which `npm publish` on a package folder would publish as they are.
+      - name: Pack
+        run: pnpm --filter "./packages/*" pack --pack-destination "$GITHUB_WORKSPACE/artifacts"
+
+      # npm publishes them: trusted publishing (OIDC) needs npm 11.5.1 or later.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@^11
+
+      - name: Publish
+        run: |
+          for package in core debug babylon; do
+            npm publish artifacts/spacexr-spatial-label-layout-$package-*.tgz --access public --provenance
+          done
+
+      - name: Dump npm debug logs on failure
+        if: failure()
+        run: |
+          npm --version
+          npm config list
+          for f in /home/runner/.npm/_logs/*.log; do
+            echo "----- $f -----"
+            cat "$f"
+          done
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true

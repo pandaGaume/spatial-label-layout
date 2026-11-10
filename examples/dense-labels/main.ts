@@ -3,8 +3,8 @@
  * diagnostics, then the priority declutter fallback.
  *   pnpm example:dense
  */
-import { SpatialLabelLayoutEngine, createCameraView, type LayoutResult } from "@spatial-label-layout/core";
-import { formatResult, renderViewSvg } from "@spatial-label-layout/debug";
+import { SpatialLabelLayoutEngine, createCameraView, type LayoutResult } from "@spacexr/spatial-label-layout-core";
+import { formatResult, renderViewSvg } from "@spacexr/spatial-label-layout-debug";
 import { rng, writeOut } from "../shared.js";
 
 const view = createCameraView({ eye: { x: 0, y: 8, z: 16 }, target: { x: 0, y: 0, z: 0 }, viewport: { width: 1280, height: 720 } });

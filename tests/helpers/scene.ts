@@ -7,7 +7,7 @@ import {
   type Handedness,
   type SpatialLabel,
   type Vec3,
-} from "@spatial-label-layout/core";
+} from "@spacexr/spatial-label-layout-core";
 
 export const VIEWPORT = { width: 1280, height: 720 };
 

@@ -1,4 +1,4 @@
-import { SpatialLabelLayoutEngine, createCameraView, createStereoViews, type CameraView, type EngineOptions } from "@spatial-label-layout/core";
+import { SpatialLabelLayoutEngine, createCameraView, createStereoViews, type CameraView, type EngineOptions } from "@spacexr/spatial-label-layout-core";
 
 export const VIEWPORT = { width: 1920, height: 1080 };
 
