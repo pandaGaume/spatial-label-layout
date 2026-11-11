@@ -26,6 +26,8 @@
   },
   "devDependencies": {
     "@babylonjs/core": "9.33.1",
+    "@babylonjs/loaders": "9.33.1",
+    "@babylonjs/serializers": "9.33.1",
     "@types/node": "^22.10.0",
     "tsx": "^4.20.0",
     "typescript": "~5.9.3",

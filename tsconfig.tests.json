@@ -14,6 +14,8 @@
     "paths": {
       "@spacexr/spatial-label-layout-core": ["packages/core/src/index.ts"],
       "@spacexr/spatial-label-layout-debug": ["packages/debug/src/index.ts"],
+      "@spacexr/spatial-label-layout-babylon/gltf-loader": ["packages/babylon/src/gltf/label-loader.ts"],
+      "@spacexr/spatial-label-layout-babylon/gltf-exporter": ["packages/babylon/src/gltf/label-exporter.ts"],
       "@spacexr/spatial-label-layout-babylon": ["packages/babylon/src/index.ts"]
     }
   },

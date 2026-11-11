@@ -8,6 +8,9 @@ export default defineConfig({
     alias: {
       "@spacexr/spatial-label-layout-core": r("./packages/core/src/index.ts"),
       "@spacexr/spatial-label-layout-debug": r("./packages/debug/src/index.ts"),
+      // The entries of a package before the package itself: an alias matches the start of an import.
+      "@spacexr/spatial-label-layout-babylon/gltf-loader": r("./packages/babylon/src/gltf/label-loader.ts"),
+      "@spacexr/spatial-label-layout-babylon/gltf-exporter": r("./packages/babylon/src/gltf/label-exporter.ts"),
       "@spacexr/spatial-label-layout-babylon": r("./packages/babylon/src/index.ts"),
     },
   },
