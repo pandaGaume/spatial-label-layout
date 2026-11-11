@@ -69,6 +69,8 @@ interface LaidOut {
   groundFrame: number;
   /** The anchor on the ground, in the frame of the parent of the node, once read. */
   grounded: Vector3 | null;
+  /** Whether the layout was last told the scene hides the anchor: the leader and the mark are then hidden. */
+  anchorHidden: boolean;
 }
 
 interface Entry {
@@ -236,6 +238,9 @@ export class LabelRuntime {
         const laidOut = entry.laidOut;
         this.locateAnchor(entry, frame);
         this.layout!.engine.setAnchorPosition(laidOut.id, laidOut.anchor);
+        // An anchor apart from the label may be hidden while the label shows: its leader and its mark go then.
+        const anchorHidden = !!entry.label.anchor && !!this.hides?.(laidOut.anchor, eye);
+        if (anchorHidden !== laidOut.anchorHidden) this.layout!.engine.updateLabel(laidOut.id, { leaderHidden: (laidOut.anchorHidden = anchorHidden) });
         // A label whose anchor is elsewhere prefers to stand by its node: the layout is told when the node moves.
         if (entry.label.anchor && !laidOut.home?.equalsWithEpsilon(place, 1e-6)) {
           laidOut.home = place.clone();
@@ -375,6 +380,7 @@ export class LabelRuntime {
       home: label.anchor ? node.getAbsolutePosition().clone() : null,
       groundFrame: -Infinity,
       grounded: null,
+      anchorHidden: false,
     };
     this.locateAnchor(entry, this.scene.getFrameId());
     this.laidOut.set(id, entry);
@@ -454,7 +460,7 @@ export class LabelRuntime {
       }
       if (!laidOut.mark) continue;
       const anchor = laidOut.anchor;
-      const scale = laidOut.visible && view ? worldUnitsPerPixel(view, anchor) * laidOut.radius : 0;
+      const scale = laidOut.visible && !laidOut.anchorHidden && view ? worldUnitsPerPixel(view, anchor) * laidOut.radius : 0;
       laidOut.mark.setEnabled(scale > 0);
       if (scale > 0) {
         laidOut.mark.position.copyFrom(anchor);

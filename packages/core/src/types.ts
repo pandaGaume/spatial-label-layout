@@ -71,6 +71,12 @@ export interface SpatialLabel {
    * update with `home: undefined` removes it.
    */
   home?: Vec3 | undefined;
+  /**
+   * Extension: the label shows without its leader, as when the scene hides its
+   * anchor (behind the relief, beyond the horizon) while the label stays in
+   * view. Default: false.
+   */
+  leaderHidden?: boolean;
   dimensions: LabelDimensions;
   /** Extension: unit of `dimensions` (default "world"). */
   sizing?: LabelSizing;

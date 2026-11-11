@@ -190,7 +190,7 @@ export class LabelLayoutController {
       const leader = this.engine.getLeader(label.id);
       if (leader && this.leaderRenderer) {
         const points = anchor ? routers.route({ leader, anchor, labelCenter: position, frame, size }) : [];
-        this.leaderRenderer.updateLeader(leader.id, points, visible && anchor !== null);
+        this.leaderRenderer.updateLeader(leader.id, points, visible && anchor !== null && !label.leaderHidden);
       }
     }
     this.labelRenderer?.endFrame?.();

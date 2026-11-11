@@ -73,7 +73,7 @@ Two engine options go with it: `anchorOutOfView: "hide"` hides the label of a pi
 
 ## A label placed apart from its anchor
 
-A label stands around its anchor by default. With `home`, a world position, it stands on its home instead when nothing is in the way, and is moved around it where it would cover another label; its leader still ends at the anchor. It shows while its home is in view, and a label sized in pixels takes its size at the depth of its home. Moving the home is an update: `engine.updateLabel(id, { home })`, and `home: undefined` takes it away.
+A label stands around its anchor by default. With `home`, a world position, it stands on its home instead when nothing is in the way, and is moved around it where it would cover another label; its leader still ends at the anchor. It shows while its home is in view, and a label sized in pixels takes its size at the depth of its home. Moving the home is an update: `engine.updateLabel(id, { home })`, and `home: undefined` takes it away. When the scene hides the anchor while the label stays in view (behind the relief, beyond the horizon), `leaderHidden: true` keeps the label and draws no leader.
 
 ```ts
 engine.addLabel({ id: "mine", anchorId: "collar", position: home, home, dimensions: { width: 120, height: 24 }, sizing: "screen", priority: 1, visible: true, enabled: true });

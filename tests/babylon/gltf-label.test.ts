@@ -400,6 +400,25 @@ describe("labels with an anchor of their own", () => {
     expect(mark.position.y).toBeCloseTo(-18, 4);
   });
 
+  it("keeps showing when the scene hides its anchor, without its leader and its mark", () => {
+    const hidden = { value: false };
+    const { scene, node, runtime } = setUp({ ...STYLE, anchor: { position: [-6, -3, 2] } }, { hides: (position) => hidden.value && position.y < 0 });
+    const segments = () => scene.meshes.filter((mesh) => mesh.renderingGroupId === 2 && mesh.name !== "label-anchor" && !mesh.name.endsWith("-plate"));
+    const mark = () => scene.meshes.find((mesh) => mesh.name === "label-anchor")!;
+    expect(segments().some((mesh) => mesh.isEnabled())).toBe(true);
+    expect(mark().isEnabled()).toBe(true);
+    // The anchor goes behind the relief: the label stays, its leader and its mark go.
+    hidden.value = true;
+    for (let frame = 0; frame < 30; frame++) scene.render();
+    expect(runtime.bodyOf(node)!.isEnabled()).toBe(true);
+    expect(segments().every((mesh) => !mesh.isEnabled())).toBe(true);
+    expect(mark().isEnabled()).toBe(false);
+    hidden.value = false;
+    for (let frame = 0; frame < 30; frame++) scene.render();
+    expect(segments().some((mesh) => mesh.isEnabled())).toBe(true);
+    expect(mark().isEnabled()).toBe(true);
+  });
+
   it("has no leader without an anchor: it stays where its node stands", () => {
     const { scene, node, runtime } = setUp({ facing: "screen", size: { referenceHeight: 1, pixels: 10 } });
     expect(runtime.labelLayout).toBeNull();
