@@ -6,6 +6,7 @@ import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.j
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
+import { Logger } from "@babylonjs/core/Misc/logger.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import "@babylonjs/loaders/glTF/2.0/index.js";
 import { GLTF2Export } from "@babylonjs/serializers/glTF/2.0/glTFSerializer.js";
@@ -396,6 +397,51 @@ describe("SPACEXR_label in glTF", () => {
     // The runtime knows the node: its content is under a body, in the overlay group, and its leader in the layout.
     expect(runtime.bodyOf(tag)?.getChildMeshes().map((mesh) => mesh.renderingGroupId)).toEqual([2]);
     expect(runtime.labelLayout).not.toBeNull();
+  });
+
+  it("keeps the hierarchy of its asset container whole: the body of the label is one of its nodes", async () => {
+    const glb = await exportGlb(TAG);
+    const { scene } = makeScene(true);
+    const runtime = new LabelRuntime(scene);
+    const warnings: string[] = [];
+    const warn = Logger.Warn;
+    // Only the warnings of the hierarchy count: the null engine also warns that it has no logarithmic depth.
+    Logger.Warn = (message: string | unknown[]) => {
+      if (/container|hierarchy/i.test(String(message))) warnings.push(String(message));
+    };
+
+    try {
+      const container = await LoadAssetContainerAsync(glb, scene, { pluginExtension: ".glb" });
+      const tag = container.transformNodes.find((node) => node.name === "tag")!;
+      const body = runtime.bodyOf(tag)!;
+
+      // The body waits for its container, then enters and leaves the scene with it.
+      expect(container.transformNodes).toContain(body);
+      expect(scene.transformNodes).not.toContain(body);
+      container.addAllToScene();
+      expect(scene.transformNodes).toContain(body);
+      expect(scene.transformNodes.filter((node) => node === body)).toHaveLength(1);
+      container.removeAllFromScene();
+      expect(scene.transformNodes).not.toContain(body);
+      container.addAllToScene();
+      expect(warnings).toEqual([]);
+
+      // Detached, the label gives its content back and its body leaves the container; attached again, it joins it.
+      runtime.detach(tag);
+      expect(body.isDisposed()).toBe(true);
+      expect(container.transformNodes).not.toContain(body);
+      runtime.attach(tag);
+      const again = runtime.bodyOf(tag)!;
+      expect(container.transformNodes).toContain(again);
+      expect(scene.transformNodes).toContain(again);
+
+      container.dispose();
+      expect(again.isDisposed()).toBe(true);
+      expect(runtime.bodyOf(tag)).toBeUndefined();
+      expect(warnings).toEqual([]);
+    } finally {
+      Logger.Warn = warn;
+    }
   });
 
   it("is kept as a declaration in a scene without a runtime", async () => {

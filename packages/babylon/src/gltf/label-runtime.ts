@@ -170,6 +170,7 @@ export class LabelRuntime {
     body.rotationQuaternion = Quaternion.Identity();
     for (const child of node.getChildren()) child.parent = body;
     body.parent = node;
+    this.join(node, body);
     const entry: Entry = { node, label, body, depth: 0, order: this.attached++, laidOut: null };
     this.entries.set(node, entry);
     node.onDisposeObservable.addOnce(() => this.forget(node));
@@ -482,6 +483,24 @@ export class LabelRuntime {
     if (!entry || entry === this.drawing) return;
     if (this.drawing) this.scene.getEngine().clear(null, false, true, false);
     this.drawing = entry;
+  }
+
+  /**
+   * Puts the body of a label in the asset container of its node, when the node
+   * was loaded into one. The body stands between the node and its content: a
+   * container that held the two without it would have a broken hierarchy. The
+   * body then enters and leaves the scene with its container, and is disposed
+   * with it.
+   */
+  private join(node: TransformNode, body: TransformNode): void {
+    // Babylon.js keeps the container of a node there, and takes a node out of the list of its container on dispose.
+    const container = node._parentContainer;
+    if (!container) return;
+    container.transformNodes.push(body);
+    body._parentContainer = container;
+    // A container that was not added to the scene yet adds its nodes itself.
+    const inScene = this.scene.transformNodes.includes(node) || (this.scene.meshes as readonly TransformNode[]).includes(node);
+    if (!inScene) this.scene.removeTransformNode(body);
   }
 
   /** Stops following a node: its place in the layout, its anchor mark and the order of its meshes. */
