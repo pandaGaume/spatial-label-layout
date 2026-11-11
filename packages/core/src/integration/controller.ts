@@ -140,9 +140,12 @@ export class LabelLayoutController {
     if (ref) {
       this.interpolator.beginFrame?.({
         view: ref,
+        // A label is held on screen against the point it is placed around: its home, or else its anchor. Held
+        // against its anchor, a label whose home stands elsewhere would be drawn at the depth of the anchor while
+        // sized at the depth of its home.
         anchorOf: (id) => {
           const label = this.engine.getLabel(id);
-          return label ? this.engine.getAnchorPosition(label.anchorId) : null;
+          return label ? (label.home ?? this.engine.getAnchorPosition(label.anchorId)) : null;
         },
         screenLocked: (id) => this.engine.getLabel(id)?.sizing === "screen",
       });
@@ -173,8 +176,9 @@ export class LabelLayoutController {
     for (const label of this.engine.getLabels()) {
       const anchor = this.engine.getAnchorPosition(label.anchorId);
       const position = this.interpolator.get(label.id) ?? label.position;
-      // "screen" sizing: the world size follows the view of every frame, not only of every solve.
-      const resolved = resolveLabelSize(label, ref, anchor ?? position);
+      // "screen" sizing: the world size follows the view of every frame, not only of every solve, taken where the
+      // label is placed around: its home, or else its anchor.
+      const resolved = resolveLabelSize(label, ref, label.home ?? anchor ?? position);
       const size = resolved ?? label.dimensions;
       const visible = (this.visibility.get(label.id) ?? false) && resolved !== null;
       const frame = orienter.frame(position, ref);

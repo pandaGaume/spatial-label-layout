@@ -71,6 +71,14 @@ engine.addLabel({ id: "city", anchorId: "city", position, dimensions: { width: 1
 
 Two engine options go with it: `anchorOutOfView: "hide"` hides the label of a pin that left every view, and `temporal.screenThresholdPx` measures camera and pin motion in pixels instead of world units.
 
+## A label placed apart from its anchor
+
+A label stands around its anchor by default. With `home`, a world position, it stands on its home instead when nothing is in the way, and is moved around it where it would cover another label; its leader still ends at the anchor. It shows while its home is in view, and a label sized in pixels takes its size at the depth of its home. Moving the home is an update: `engine.updateLabel(id, { home })`, and `home: undefined` takes it away.
+
+```ts
+engine.addLabel({ id: "mine", anchorId: "collar", position: home, home, dimensions: { width: 120, height: 24 }, sizing: "screen", priority: 1, visible: true, enabled: true });
+```
+
 ## Leader routing
 
 `straight` (default) attaches the leader where the line from the pin meets the border of the label. `elbow` leaves the pin horizontally, turns vertically and enters the label through a horizontal stub. `polyline` goes through points the caller gives. Crossings are detected in projection and reduced by swapping label positions, never by reassigning a leader.

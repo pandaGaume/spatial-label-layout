@@ -64,6 +64,13 @@ export interface SpatialLabel {
   anchorId: string;
   /** World position. On `addLabel` it is used as warm start only when `initialization` is "provided". */
   position: Vec3;
+  /**
+   * Extension: where the label prefers to stand, in the world, when it is not
+   * its anchor. The label is placed and pulled around it, and shows while it is
+   * in view; its leader still ends at the anchor. Default: the anchor; an
+   * update with `home: undefined` removes it.
+   */
+  home?: Vec3 | undefined;
   dimensions: LabelDimensions;
   /** Extension: unit of `dimensions` (default "world"). */
   sizing?: LabelSizing;

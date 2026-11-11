@@ -343,6 +343,71 @@ describe("labels with a leader", () => {
   });
 });
 
+describe("labels with an anchor of their own", () => {
+  /** Where a point of the scene shows on screen, in pixels. */
+  const onScreen = (scene: Scene, point: Vector3): Vector3 =>
+    Vector3.Project(point, Matrix.Identity(), scene.getTransformMatrix(), scene.activeCamera!.viewport.toGlobal(WIDTH, HEIGHT));
+
+  /** A label standing above a site, its anchor on the site, both under a moved, turned and scaled tile. */
+  const setUp = (label: SpaceXrLabel, options: ConstructorParameters<typeof LabelRuntime>[1] = {}) => {
+    const { scene, camera } = makeScene(true);
+    const parent = new TransformNode("tile", scene);
+    parent.position.set(4, -2, 1);
+    parent.rotationQuaternion = Quaternion.FromEulerAngles(0.3, 0.2, -0.1);
+    parent.scaling.setAll(1.5);
+    const node = new TransformNode("label", scene);
+    node.parent = parent;
+    node.position.set(6, 5, 0);
+    const plate = CreateBox("label-plate", { width: 4, height: 2, depth: 0.1 }, scene);
+    plate.parent = node;
+    setNodeLabel(node, label);
+    const runtime = new LabelRuntime(scene, { overlayRenderingGroupId: 2, ...options });
+    runtime.attach(node);
+    for (let frame = 0; frame < 90; frame++) scene.render();
+    return { scene, camera, parent, node, runtime };
+  };
+  const STYLE: SpaceXrLabel = { facing: "screen", size: { referenceHeight: 1, pixels: 10 }, overlay: true, leader: { color: [1, 0.5, 0], anchorRadius: 5 } };
+
+  it("stands by its node and marks its anchor, where its leader ends", () => {
+    const { scene, parent, node, runtime } = setUp({ ...STYLE, anchor: { position: [-6, -3, 2] } });
+    const anchor = Vector3.TransformCoordinates(new Vector3(-6, -3, 2), parent.computeWorldMatrix(true));
+    const body = runtime.bodyOf(node)!;
+    const centre = onScreen(scene, body.computeWorldMatrix(true).getTranslation());
+    // On screen, the label is by its node, far from its anchor.
+    expect(Vector3.Distance(centre, onScreen(scene, node.getAbsolutePosition()))).toBeLessThan(Vector3.Distance(centre, onScreen(scene, anchor)) / 2);
+    const marks = scene.meshes.filter((mesh) => mesh.name === "label-anchor");
+    expect(marks).toHaveLength(1);
+    expectVector(marks[0]!.position, anchor, 4);
+    // The node is not moved: the label is placed around it.
+    expectVector(node.position, new Vector3(6, 5, 0));
+  });
+
+  it("follows its node when it moves, its anchor staying", () => {
+    const { scene, parent, node, runtime } = setUp({ ...STYLE, anchor: { position: [-6, -3, 2] } });
+    const anchor = Vector3.TransformCoordinates(new Vector3(-6, -3, 2), parent.computeWorldMatrix(true));
+    node.position.set(6, 5, -8);
+    for (let frame = 0; frame < 120; frame++) scene.render();
+    const body = runtime.bodyOf(node)!;
+    const centre = onScreen(scene, body.computeWorldMatrix(true).getTranslation());
+    expect(Vector3.Distance(centre, onScreen(scene, node.getAbsolutePosition()))).toBeLessThan(80);
+    expectVector(scene.meshes.find((mesh) => mesh.name === "label-anchor")!.position, anchor, 4);
+  });
+
+  it("stands its anchor on the ground the scene gives, raised by its offset", () => {
+    const ground = { project: (position: Vector3, offset: number, result: Vector3) => (result.set(position.x, -20 + offset, position.z), true) };
+    const { scene } = setUp({ ...STYLE, anchor: { position: [-6, -3, 2], ground: { offset: 2 } } }, { ground });
+    const mark = scene.meshes.find((mesh) => mesh.name === "label-anchor")!;
+    expect(mark.position.y).toBeCloseTo(-18, 4);
+  });
+
+  it("has no leader without an anchor: it stays where its node stands", () => {
+    const { scene, node, runtime } = setUp({ facing: "screen", size: { referenceHeight: 1, pixels: 10 } });
+    expect(runtime.labelLayout).toBeNull();
+    expect(scene.meshes.filter((mesh) => mesh.name === "label-anchor")).toHaveLength(0);
+    expectVector(runtime.bodyOf(node)!.getAbsolutePosition(), node.getAbsolutePosition(), 4);
+  });
+});
+
 describe("SPACEXR_label in glTF", () => {
   const TAG: SpaceXrLabel = {
     facing: "screen",
@@ -450,6 +515,24 @@ describe("SPACEXR_label in glTF", () => {
     const container = await LoadAssetContainerAsync(glb, makeScene(true).scene, { pluginExtension: ".glb" });
 
     expect(getNodeLabel(container.transformNodes.find((node) => node.name === "tag")!)).toEqual({ facing: "screen" });
+  });
+
+  it("writes and reads back an anchor, converted as the translation of its node in a left-handed scene", async () => {
+    const anchored: SpaceXrLabel = { ...TAG, anchor: { position: [3, -1, 2], ground: { offset: 1.5 } } };
+    expect(documentOf(await exportGlb(anchored)).nodes.find((node) => node.name === "tag")?.extensions).toEqual({ SPACEXR_label: anchored });
+    expect(parseSpaceXrLabel({ anchor: { position: [1, 2, 3] } })).toEqual({ anchor: { position: [1, 2, 3] } });
+    expect(() => parseSpaceXrLabel({ anchor: { position: [1, 2] } })).toThrow();
+    expect(() => parseSpaceXrLabel({ anchor: { position: [1, 2, 3], ground: { offset: "low" } } })).toThrow();
+
+    const { scene } = makeScene(false);
+    const node = new TransformNode("tag", scene);
+    node.position.set(4, 5, 6);
+    setNodeLabel(node, anchored);
+    const data = await GLTF2Export.GLBAsync(scene, "content");
+    const glb = new Uint8Array(await (data.files["content.glb"] as Blob).arrayBuffer());
+    const written = documentOf(glb).nodes.find((item) => item.name === "tag")!;
+    expect((written as { translation?: number[] }).translation).toEqual([-4, 5, 6]);
+    expect((written.extensions!.SPACEXR_label as SpaceXrLabel).anchor!.position).toEqual([-3, -1, 2]);
   });
 
   it("is ignored when malformed, and its node still loaded", async () => {

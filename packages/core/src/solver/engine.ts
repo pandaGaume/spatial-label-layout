@@ -229,7 +229,12 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     this.assertAlive();
     if (this.records.has(label.id)) throw new Error(`label "${label.id}" already exists`);
     validateLabel(label);
-    const copy: SpatialLabel = { ...label, position: clone(label.position), dimensions: { ...label.dimensions } };
+    const copy: SpatialLabel = {
+      ...label,
+      position: clone(label.position),
+      dimensions: { ...label.dimensions },
+      ...(label.home ? { home: clone(label.home) } : {}),
+    };
     const leader = this.graph.add(label.id, label.anchorId, label.routing ?? this.config.defaultRouting);
     this.records.set(label.id, {
       label: copy,
@@ -263,6 +268,8 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       position: patch.position ? clone(patch.position) : rec.label.position,
       dimensions: patch.dimensions ? { ...patch.dimensions } : rec.label.dimensions,
     };
+    if (patch.home) next.home = clone(patch.home);
+    else if ("home" in patch) delete next.home;
     validateLabel(next);
     // An explicit position, or a change of unit, supersedes the pixel offset kept for "screen" sizing.
     if (patch.position || (next.sizing ?? "world") !== (rec.label.sizing ?? "world")) rec.offset = null;
@@ -440,17 +447,19 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
           continue;
         }
         const anchor = this.anchors.get(rec.label.anchorId)?.world as Vec3;
-        const anchorDepth = dot(sub(anchor, ref.position), ref.forward);
-        let pullTarget = anchor;
+        // A label with a home of its own is placed around it; its leader still ends at the anchor.
+        const home = rec.label.home ?? anchor;
+        const anchorDepth = dot(sub(home, ref.position), ref.forward);
+        let pullTarget = home;
         if (anchorDepth <= 0) {
           if (cfg.behindCamera === "hide") {
             hidden.set(rec.label.id, "anchor-behind-camera");
             messages.push({ code: "anchor-behind-camera", message: `anchor "${rec.label.anchorId}" is behind the camera`, labelIds: [rec.label.id] });
             continue;
           }
-          if (cfg.behindCamera === "reposition") pullTarget = this.behindCameraProxy(ref, anchor);
+          if (cfg.behindCamera === "reposition") pullTarget = this.behindCameraProxy(ref, home);
         }
-        if (cfg.anchorOutOfView === "hide" && !this.anchorInView(anchor, views)) {
+        if (cfg.anchorOutOfView === "hide" && !this.anchorInView(home, views)) {
           hidden.set(rec.label.id, "anchor-out-of-view");
           continue;
         }
@@ -642,7 +651,8 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       const rects: Array<Rect2 | null> = [];
       const segs: Array<{ id: string; s: Segment2[] }> = [];
       for (const rec of this.records.values()) {
-        const anchorWorld = this.anchors.get(rec.label.anchorId)?.world ?? null;
+        // The point the label is placed around: its home, or else its anchor.
+        const anchorWorld = rec.label.home ?? this.anchors.get(rec.label.anchorId)?.world ?? null;
         const reason = this.classify(rec) ?? hiddenById.get(rec.label.id);
         // "screen" sizing: the label is drawn where it stands on screen now, at its size in pixels.
         const size = (anchorWorld ? resolveLabelSize(rec.label, ref, anchorWorld) : null) ?? rec.size ?? rec.label.dimensions;
@@ -1532,4 +1542,5 @@ const validateLabel = (label: SpatialLabel): void => {
     throw new RangeError(`label "${label.id}": dimensions must be positive and finite`);
   }
   if (!Number.isFinite(label.priority)) throw new RangeError(`label "${label.id}": priority must be finite`);
+  if (label.home !== undefined && !isFiniteVec3(label.home)) throw new RangeError(`label "${label.id}": home must be a finite position`);
 };

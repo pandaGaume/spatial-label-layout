@@ -60,6 +60,31 @@ describe("SpatialLabelLayoutEngine: basics", () => {
     expect(engine.lastLayout?.placements.every((p) => p.anchorId === `a${p.id.slice(1)}`)).toBe(true);
   });
 
+  it("places a label around its home, its leader still ending at its anchor", () => {
+    const engine = new SpatialLabelLayoutEngine({ temporal: { enabled: false } });
+    const anchor = { x: -4, y: 0, z: 0 };
+    const home = { x: 4, y: 2, z: 0 };
+    engine.setAnchorPosition("pin", anchor);
+    engine.addLabel(makeLabel("tag", "pin", { home }));
+    const r = engine.solve(ctx());
+    const placement = r.placements.find((p) => p.id === "tag")!;
+    expect(placement.visible).toBe(true);
+    const near = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+    // The label stands on its home, which nothing covers, far from its anchor; its leader is the anchor's.
+    expect(near(placement.position, home)).toBeLessThan(0.05);
+    expect(near(placement.position, home)).toBeLessThan(near(placement.position, anchor) / 2);
+    expect(engine.getLeader("tag")).toMatchObject({ anchorId: "pin", labelId: "tag" });
+    // A home moved later draws the label after it, a step per solve as the runtime solves each frame; removed, the
+    // label goes back to its anchor.
+    engine.updateLabel("tag", { home: { x: 4, y: 2, z: -6 } });
+    let moved = placement;
+    for (let frame = 0; frame < 30; frame++) moved = engine.solve(ctx()).placements.find((p) => p.id === "tag")!;
+    expect(moved.position.z).toBeLessThan(-3);
+    engine.updateLabel("tag", { home: undefined });
+    expect(engine.getLabel("tag")?.home).toBeUndefined();
+    expect(() => engine.updateLabel("tag", { home: { x: Number.NaN, y: 0, z: 0 } })).toThrow(RangeError);
+  });
+
   it("is deterministic", () => {
     const a = randomScene({ count: 60, seed: 3 }).engine.solve(ctx());
     const b = randomScene({ count: 60, seed: 3 }).engine.solve(ctx());

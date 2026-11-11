@@ -20,10 +20,26 @@ class SpaceXrLabelExporter implements IGLTFExporterExtensionV2 {
   readonly required = false;
   wasUsed = false;
 
-  async postExportNodeAsync(_context: string, node: GltfNode, babylonNode: Node): Promise<Nullable<GltfNode>> {
+  async postExportNodeAsync(
+    _context: string,
+    node: GltfNode,
+    babylonNode: Node,
+    _nodeMap?: unknown,
+    convertToRightHanded?: boolean,
+  ): Promise<Nullable<GltfNode>> {
     const label = getNodeLabel(babylonNode);
     if (label) {
-      const written = { ...label, ...(label.size ? { size: { ...label.size } } : {}), ...(label.leader ? { leader: { ...label.leader } } : {}) };
+      // The anchor is in the frame of the parent of the node: it is converted as the translation of the node is.
+      const anchor = label.anchor && {
+        position: [convertToRightHanded ? -label.anchor.position[0] : label.anchor.position[0], label.anchor.position[1], label.anchor.position[2]],
+        ...(label.anchor.ground ? { ground: { ...label.anchor.ground } } : {}),
+      };
+      const written = {
+        ...label,
+        ...(label.size ? { size: { ...label.size } } : {}),
+        ...(label.leader ? { leader: { ...label.leader } } : {}),
+        ...(anchor ? { anchor } : {}),
+      };
       node.extensions = { ...node.extensions, [SPACEXR_LABEL]: written };
       this.wasUsed = true;
     }

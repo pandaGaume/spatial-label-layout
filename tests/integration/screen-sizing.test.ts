@@ -236,6 +236,26 @@ describe("controller and skipped solves", () => {
   });
 });
 
+describe("labels sized in pixels, placed around a home apart from their anchor", () => {
+  it("take their size at the depth of their home and stand there, their leader going to the anchor", () => {
+    // The home stands 5 units nearer than the anchor: sized at the anchor, the label would show 2x too large.
+    const camera = new StaticCameraProvider([from(10)]);
+    const labels = new RecordingLabelRenderer();
+    const leaders = new RecordingLeaderRenderer();
+    const controller = new LabelLayoutController({ camera, labelRenderer: labels, leaderRenderer: leaders, scheduler: new EveryFrameScheduler() });
+    const home = { x: 1, y: 0.5, z: 5 };
+    controller.engine.setAnchorPosition("pin", ORIGIN);
+    controller.addLabel(makeLabel("label", "pin", { dimensions: PIXELS, sizing: "screen", home }));
+    for (let frame = 0; frame < 30; frame++) controller.tick(1 / 60);
+    const transform = labels.labels.get("label")!.transform!;
+    const view = resolveView(from(10), 0);
+    // Its depth is that of its home, and its world size shows its pixels there.
+    expect(projectPoint(view, transform.position).depth).toBeCloseTo(projectPoint(view, home).depth, 3);
+    expect(transform.height).toBeCloseTo(PIXELS.height * worldUnitsPerPixel(view, home), 6);
+    expect(leaders.leaders.size).toBe(1);
+  });
+});
+
 describe("vectors with accessor properties", () => {
   /** Shaped as the vectors of Babylon.js: coordinates behind accessors, which an object spread does not copy. */
   class AccessorVector {

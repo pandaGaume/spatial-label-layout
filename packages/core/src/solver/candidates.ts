@@ -44,12 +44,15 @@ export class RadialCandidateGenerator implements CandidateGenerator {
 
   generate(input: CandidateInput): Vec3[] {
     const { anchor, view, frame, size, leaderLengthPx } = input;
+    // A label with a home of its own prefers to stand right on it: `anchor` is that home here, and its leader goes
+    // to the anchor elsewhere. The places around it follow, for when it covers another label.
+    const home: Vec3[] = input.label.home ? [anchor] : [];
     const j = pixelJacobian(view, anchor, frame.right, frame.up);
-    if (!j) return [addScaled(anchor, frame.up, size.height)];
+    if (!j) return [...home, addScaled(anchor, frame.up, size.height)];
     // Half label extents in pixels.
     const hwPx = Math.hypot(j.a, j.c) * (size.width / 2);
     const hhPx = Math.hypot(j.b, j.d) * (size.height / 2);
-    const out: Vec3[] = [];
+    const out: Vec3[] = [...home];
     for (let ring = 0; ring < this.rings; ring++) {
       const radius = leaderLengthPx * (ring + 1);
       for (let k = 0; k < this.directions; k++) {

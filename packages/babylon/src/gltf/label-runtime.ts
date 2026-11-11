@@ -14,7 +14,7 @@ import type { Scene } from "@babylonjs/core/scene.js";
 import { RadialCandidateGenerator, worldUnitsPerPixel, type EngineOptions } from "@spacexr/spatial-label-layout-core";
 import type { BabylonLabelNode } from "../label-renderer.js";
 import { BabylonLabelLayout, type BabylonLabelLayoutOptions } from "../layout.js";
-import { DEFAULT_LABEL_PRIORITY, DEFAULT_LEADER_WIDTH, getNodeLabel, type SpaceXrLabel } from "./label.js";
+import { DEFAULT_LABEL_PRIORITY, DEFAULT_LEADER_WIDTH, getNodeLabel, hasAnchor, type SpaceXrLabel } from "./label.js";
 
 export interface LabelRuntimeOptions {
   /**
@@ -36,6 +36,16 @@ export interface LabelRuntimeOptions {
    * runtime. This is the policy of the client, or of its view.
    */
   layout?: EngineOptions;
+  /**
+   * The ground the scene displays, for the anchors that stand on it: writes the
+   * point of the ground on the vertical of `position`, raised by `offset`, and
+   * returns false where no ground is known yet. The same contract as the ground
+   * of `SPACEXR_ground_reference`. Without it, such an anchor keeps the
+   * position written in the glTF.
+   */
+  ground?: { project(position: Vector3, offset: number, result: Vector3): boolean };
+  /** Frames between two readings of the ground under an anchor. Default: 30. */
+  groundRefreshFrames?: number;
 }
 
 /** A label the layout places: it has a leader. */
@@ -51,10 +61,18 @@ interface LaidOut {
   /** The local transform this runtime last wrote on the body, to tell when the layout wrote a new one. */
   position: Vector3;
   scaling: Vector3;
+  /** Where the anchor stands, in the frame of the scene. */
+  anchor: Vector3;
+  /** Where the label was last told it prefers to stand: the origin of its node, when its anchor is elsewhere. */
+  home: Vector3 | null;
+  /** Frame of the last reading of the ground under the anchor. */
+  groundFrame: number;
+  /** The anchor on the ground, in the frame of the parent of the node, once read. */
+  grounded: Vector3 | null;
 }
 
 interface Entry {
-  /** The node of the glTF: its origin is the anchor. This runtime never moves it. */
+  /** The node of the glTF: its origin is where the label stands. This runtime never moves it. */
   node: TransformNode;
   label: SpaceXrLabel;
   /** Holds the content of the label, below the node: what this runtime turns, scales and moves. */
@@ -76,6 +94,7 @@ const LEADER_LENGTH = 34;
 const LABEL_PADDING = 6;
 /** Distance an anchor moves on screen before the labels are laid out again, in pixels. */
 const LAYOUT_STEP = 0.5;
+const DEFAULT_GROUND_FRAMES = 30;
 
 /**
  * Applies `SPACEXR_label` to the nodes of a Babylon.js scene, frame after
@@ -87,9 +106,11 @@ const LAYOUT_STEP = 0.5;
  * the nodes it reads to the runtime of the scene it loads into; a scene without
  * a runtime keeps the declarations and the authored transforms.
  *
- * The node of a label is its anchor, and is never moved here: whatever places
- * it, an animation, a reference to the ground, keeps doing so. Its content is
- * put under a body node, which this runtime turns, scales and moves.
+ * The node of a label is where it stands, and is never moved here: whatever
+ * places it, an animation, a reference to the ground, keeps doing so. Its
+ * content is put under a body node, which this runtime turns, scales and moves.
+ * A label with an anchor elsewhere is placed around its node and linked to its
+ * anchor by its leader, the mark of the anchor drawn there.
  *
  * A label that faces the screen looks along the axis of the camera, not at its
  * position: labels are parallel to one another, and two neighbours never cut
@@ -118,6 +139,8 @@ export class LabelRuntime {
   private readonly overlayGroup: number;
   private readonly hides: ((anchor: Vector3, eye: Vector3) => boolean) | undefined;
   private readonly layoutOptions: EngineOptions;
+  private readonly ground: LabelRuntimeOptions["ground"];
+  private readonly groundFrames: number;
   /** The overlay whose meshes are being drawn, in the camera that renders. */
   private drawing: Entry | null = null;
   private ordered = false;
@@ -145,6 +168,8 @@ export class LabelRuntime {
     this.overlayGroup = options.overlayRenderingGroupId ?? DEFAULT_OVERLAY_GROUP;
     this.hides = options.hides ? (anchor, eye) => options.hides!(anchor, eye) : undefined;
     this.layoutOptions = options.layout ?? {};
+    this.ground = options.ground;
+    this.groundFrames = Math.max(1, options.groundRefreshFrames ?? DEFAULT_GROUND_FRAMES);
     this.observer = scene.onBeforeCameraRenderObservable.add((camera) => this.update(camera));
     scene.onDisposeObservable.addOnce(() => this.dispose());
     runtimes.set(scene, this);
@@ -174,7 +199,7 @@ export class LabelRuntime {
     const entry: Entry = { node, label, body, depth: 0, order: this.attached++, laidOut: null };
     this.entries.set(node, entry);
     node.onDisposeObservable.addOnce(() => this.forget(node));
-    if (label.leader) this.layOut(entry);
+    if (hasAnchor(label)) this.layOut(entry);
     if (label.overlay) this.overlay(entry);
   }
 
@@ -205,16 +230,23 @@ export class LabelRuntime {
       }
       // The layout and this runtime enable and disable the body: the node says whether the label shows at all.
       const shown = node.isEnabled();
-      const anchor = node.getAbsolutePosition();
-      const visible = shown && !this.hides?.(anchor, eye);
+      const place = node.getAbsolutePosition();
+      const visible = shown && !this.hides?.(place, eye);
       if (entry.laidOut) {
-        this.layout!.engine.setAnchorPosition(entry.laidOut.id, anchor);
+        const laidOut = entry.laidOut;
+        this.locateAnchor(entry, frame);
+        this.layout!.engine.setAnchorPosition(laidOut.id, laidOut.anchor);
+        // A label whose anchor is elsewhere prefers to stand by its node: the layout is told when the node moves.
+        if (entry.label.anchor && !laidOut.home?.equalsWithEpsilon(place, 1e-6)) {
+          laidOut.home = place.clone();
+          this.layout!.engine.updateLabel(laidOut.id, { home: { x: place.x, y: place.y, z: place.z } });
+        }
         if (visible !== entry.laidOut.visible) this.layout!.engine.updateLabel(entry.laidOut.id, { visible: (entry.laidOut.visible = visible) });
         continue;
       }
       if (!shown) continue;
       body.setEnabled(visible);
-      if (visible) this.present(entry, anchor, camera);
+      if (visible) this.present(entry, place, camera);
     }
     if (this.layout && this.laidOut.size) this.place(camera, frame);
   }
@@ -314,7 +346,7 @@ export class LabelRuntime {
   /** Hands a label that has a leader to the layout, with its leader and the mark of its anchor. */
   private layOut(entry: Entry): void {
     const { node, body, label } = entry;
-    const leader = label.leader!;
+    const leader = label.leader ?? {};
     if (label.facing !== "screen" && !this.warnedFacing) {
       this.warnedFacing = true;
       Logger.Warn("SPACEXR_label: a label with a leader faces the screen, whatever its facing.");
@@ -331,7 +363,20 @@ export class LabelRuntime {
       mark.isPickable = false;
       mark.setEnabled(false);
     }
-    entry.laidOut = { id, visible: false, material, mark, radius, position: new Vector3(NaN, NaN, NaN), scaling: new Vector3(NaN, NaN, NaN) };
+    entry.laidOut = {
+      id,
+      visible: false,
+      material,
+      mark,
+      radius,
+      position: new Vector3(NaN, NaN, NaN),
+      scaling: new Vector3(NaN, NaN, NaN),
+      anchor: node.getAbsolutePosition().clone(),
+      home: label.anchor ? node.getAbsolutePosition().clone() : null,
+      groundFrame: -Infinity,
+      grounded: null,
+    };
+    this.locateAnchor(entry, this.scene.getFrameId());
     this.laidOut.set(id, entry);
 
     const { width, height } = this.measure(entry);
@@ -339,10 +384,12 @@ export class LabelRuntime {
     const factor = label.size ? label.size.pixels / label.size.referenceHeight : Math.abs(node.scaling.y);
     // The body belongs to its label: the layout places it and never disposes it.
     this.pending.set(id, { node: body, width, height, front: "+z", dispose: () => undefined });
+    layout.engine.setAnchorPosition(id, entry.laidOut.anchor);
     layout.controller.addLabel({
       id,
       anchorId: id,
       position: node.getAbsolutePosition(),
+      ...(entry.laidOut.home ? { home: { x: entry.laidOut.home.x, y: entry.laidOut.home.y, z: entry.laidOut.home.z } } : {}),
       dimensions: { width: width * factor, height: height * factor },
       sizing: label.size ? "screen" : "world",
       priority: label.priority ?? DEFAULT_LABEL_PRIORITY,
@@ -406,7 +453,7 @@ export class LabelRuntime {
         laidOut.scaling.copyFrom(body.scaling);
       }
       if (!laidOut.mark) continue;
-      const anchor = node.getAbsolutePosition();
+      const anchor = laidOut.anchor;
       const scale = laidOut.visible && view ? worldUnitsPerPixel(view, anchor) * laidOut.radius : 0;
       laidOut.mark.setEnabled(scale > 0);
       if (scale > 0) {
@@ -414,6 +461,36 @@ export class LabelRuntime {
         laidOut.mark.scaling.setAll(scale);
       }
     }
+  }
+
+  /**
+   * Where the anchor of a laid out label stands in the frame of the scene: the
+   * origin of its node, or the point of `anchor` in the frame of the parent of the
+   * node, set on the ground when it refers to it and the ground is known. The
+   * ground is read again every few frames, as it refines.
+   */
+  private locateAnchor(entry: Entry, frame: number): void {
+    const laidOut = entry.laidOut!;
+    const anchor = entry.label.anchor;
+    if (!anchor) {
+      laidOut.anchor.copyFrom(entry.node.getAbsolutePosition());
+      return;
+    }
+    const parent = entry.node.parent;
+    const world = parent ? parent.getWorldMatrix() : Matrix.IdentityReadOnly;
+    const local = Vector3.FromArray(anchor.position);
+    if (anchor.ground && this.ground) {
+      if (frame - laidOut.groundFrame >= this.groundFrames) {
+        laidOut.groundFrame = frame;
+        const written = Vector3.TransformCoordinates(local, world);
+        const grounded = new Vector3();
+        laidOut.grounded = this.ground.project(written, anchor.ground.offset ?? 0, grounded)
+          ? Vector3.TransformCoordinates(grounded, world.clone().invert())
+          : null;
+      }
+      if (laidOut.grounded) local.copyFrom(laidOut.grounded);
+    }
+    Vector3.TransformCoordinatesToRef(local, world, laidOut.anchor);
   }
 
   /** The size of a label along the local x and y axes of its node, from its meshes: the rectangle centred on its anchor. */

@@ -77,14 +77,15 @@ A glTF node may declare itself a label. The package reads the extension, writes 
 }
 ```
 
-A label is an object made to be read, attached to the point it names: the origin of its node, its anchor. It reads along its local +X axis, its height along +Y, its face toward +Z. Every property is optional.
+A label is an object made to be read. The origin of its node is where it stands. The point it names, its anchor, is given by `anchor`: a position in the frame of the parent of the node, as the translation of the node, on the ground the client displays when `ground` is given. A leader links the label to its anchor. With `leader` and no `anchor`, the anchor is the origin of the node, as before version 0.6 of the GeoModels v2 specification; a label with neither names nothing but its own place and has no leader. It reads along its local +X axis, its height along +Y, its face toward +Z. Every property is optional.
 
 | Property | Role |
 |---|---|
 | `facing` | `screen`: the label stays parallel to the screen. Without it, it keeps the orientation of the glTF. |
 | `size` | The length `referenceHeight` of its local +Y axis takes `pixels` CSS pixels on screen. Without it, its size is metric. |
 | `overlay` | The label is drawn over the rest of the scene, never occluded. |
-| `leader` | The client may move the label away from its anchor, on screen, so that it covers no other, and links the two by a line. |
+| `leader` | The style of the line that links the label to its anchor. Without `anchor`, it also makes the origin of the node the anchor. |
+| `anchor` | The point the label names: `position` in the frame of the parent of the node, and `ground` (`{ offset }`) to stand it on the displayed ground. |
 | `priority` | Labels of higher priority move less and are hidden last. Defaults to 1. |
 
 `leader.color` is linear RGB, white by default; `leader.width` is in pixels, 1.5 by default; `leader.anchorRadius` is the radius in pixels of the mark drawn on the anchor, 0 by default for no mark. The extension is listed in `extensionsUsed` and never in `extensionsRequired`: a client that does not know it shows the node with the transform written in the glTF.
@@ -120,7 +121,7 @@ How the runtime presents a label:
 - **Facing.** A label that faces the screen looks along the axis of the camera, toward the viewer, not at the position of the camera: labels are parallel to one another, and two neighbours never cut through each other. In a headset, where the plane of the screen turns with the head, the label faces the head.
 - **Size.** The label is scaled by `pixels × m / H`: `H` is the reference height in the scene with the authored scale, `m` the length a CSS pixel covers at the view depth of the anchor.
 - **Overlay.** The meshes of the label go to a rendering group drawn last on a cleared depth buffer. Overlays are drawn back to front, the depth buffer cleared between two of them: each one covers those behind it, and its own parts still hide one another.
-- **Leader.** The label is handed to a `BabylonLabelLayout`, which moves it away from its anchor where it would cover another label, hides the least important ones where they cannot all fit, and draws the leader. The runtime draws the anchor mark.
+- **Leader.** A label with an anchor is handed to a `BabylonLabelLayout`. It stands on its node when nothing is in the way, is moved around it where it would cover another label, the least important ones hidden where they cannot all fit, and the leader is drawn to the anchor. The runtime draws the anchor mark, and stands an anchor with `ground` on the ground the `ground` option of `LabelRuntime` gives.
 
 Limits: a label with a leader always faces the screen, since the layout places a rectangle of the screen; leaders share one width, that of the first label that has one; a mesh shared by several nodes is one Babylon mesh with instances, drawn in one rendering group; in a headset, how a pixel maps to an angle of view is not settled.
 
