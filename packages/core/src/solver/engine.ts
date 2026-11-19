@@ -144,6 +144,31 @@ interface Evaluation {
   outOfView: Set<string>;
 }
 
+/** State of a label record a solve may write, kept to undo a solve that made the layout no better. */
+interface SavedRecord {
+  position: Vec3;
+  placed: boolean;
+  offset: Vec2 | null;
+  size: LabelDimensions | null;
+}
+
+/** Defects of a layout, the most serious first: collisions, labels hidden to declutter, out of view, crossings, occlusions. */
+type LayoutQuality = readonly number[];
+
+const layoutQuality = (result: LayoutResult, ev: Evaluation): LayoutQuality => [
+  result.unresolvedCollisions,
+  result.diagnostics?.hiddenLabels.filter((h) => h.reason === "decluttered").length ?? 0,
+  ev.outOfView.size,
+  ev.perView.reduce((s, v) => s + v.crossings, 0),
+  ev.occluded.size,
+];
+
+/** Lexicographic: a layout is better when its first differing count is lower. */
+const betterQuality = (a: LayoutQuality, b: LayoutQuality): boolean => {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return (a[i] as number) < (b[i] as number);
+  return false;
+};
+
 /** Relaxation iterations without improvement before handing over to the discrete repair. */
 const STALL_ITERATIONS = 8;
 
@@ -178,6 +203,8 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
   private clock = 0;
   /** Hysteresis state for discrete reorganizations (see TemporalConfig.reorganizeAfterSolves). */
   private reorg: ReorgState = newReorgState();
+  /** Defects left by the last kept solve: a solve that nothing outside asked for must do better. */
+  private lastQuality: LayoutQuality | null = null;
 
   constructor(options: EngineOptions = {}) {
     const { occlusion, observers, routers, ...config } = options;
@@ -380,6 +407,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     for (const r of this.records.values()) r.offset = null;
     for (const r of this.records.values()) if (r.placed) r.position = clone(r.label.position);
     this.lastResult = null;
+    this.lastQuality = null;
     this.stabilizer.reset();
     this.reorg = newReorgState();
     this.dirty = true;
@@ -428,6 +456,11 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       for (const o of this.observers) o.onSolveEnd?.(result);
       return result;
     }
+
+    // Nothing moved since the last solve: this one only gives a defect its hysteresis. It is kept only if it
+    // makes the layout better, so that a still scene settles instead of trading one defect for another forever.
+    const settling = decision.reason === "pending-reorganization" && this.lastResult !== null && this.lastQuality !== null;
+    const before = settling ? this.saveRecords() : null;
 
     const topologyBefore = this.graph.snapshot();
     const relaxViews = context.referenceView ? [ref, ...views] : views;
@@ -620,7 +653,18 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
         if (violations.length > 0) throw new TopologyError(`leader topology changed during solve: ${JSON.stringify(violations)}`);
       }
 
+      const quality = layoutQuality(result, evaluation);
+      if (before && !betterQuality(quality, this.lastQuality as LayoutQuality)) {
+        // The attempt counts for the backoff of the defects it tried to fix, but the layout stays as it was.
+        this.restoreRecords(before);
+        this.reorg.pending = this.computePending();
+        const kept = this.reuseLast(t0, "no-improvement");
+        for (const o of this.observers) o.onSolveEnd?.(kept);
+        return kept;
+      }
+
       this.lastResult = result;
+      this.lastQuality = quality;
       this.dirty = false;
       for (const a of this.anchors.values()) a.solved = a.world ? clone(a.world) : null;
       this.reorg.pending = this.computePending();
@@ -730,6 +774,23 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     const a = this.anchors.get(rec.label.anchorId)?.world;
     if (!a) return "missing-anchor";
     return undefined;
+  }
+
+  private saveRecords(): Map<LabelRecord, SavedRecord> {
+    const out = new Map<LabelRecord, SavedRecord>();
+    for (const r of this.records.values()) {
+      out.set(r, { position: clone(r.position), placed: r.placed, offset: r.offset ? { ...r.offset } : null, size: r.size ? { ...r.size } : null });
+    }
+    return out;
+  }
+
+  private restoreRecords(saved: Map<LabelRecord, SavedRecord>): void {
+    for (const [r, s] of saved) {
+      r.position = s.position;
+      r.placed = s.placed;
+      r.offset = s.offset;
+      r.size = s.size;
+    }
   }
 
   private commit(w: Work, ref: ResolvedView): void {
