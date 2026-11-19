@@ -1,4 +1,4 @@
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![npm](https://img.shields.io/npm/v/@spacexr/spatial-label-layout-babylon)](https://www.npmjs.com/package/@spacexr/spatial-label-layout-babylon) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 # @spacexr/spatial-label-layout-babylon
 

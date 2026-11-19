@@ -1,3 +1,5 @@
+[![core](https://img.shields.io/npm/v/@spacexr/spatial-label-layout-core?label=core)](https://www.npmjs.com/package/@spacexr/spatial-label-layout-core) [![babylon](https://img.shields.io/npm/v/@spacexr/spatial-label-layout-babylon?label=babylon)](https://www.npmjs.com/package/@spacexr/spatial-label-layout-babylon) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 # spatial-label-layout
 
 Free placement of 3D labels around pins attached to meshes. The core has no rendering dependency: it projects billboards into each camera view (one for desktop, two eyes plus a head pose for WebXR), resolves overlaps there, and returns world positions. Each label keeps its leader to the same pin for its whole life. Labels are world-space billboards; there is no DOM overlay.
