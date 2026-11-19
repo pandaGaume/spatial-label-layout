@@ -212,6 +212,24 @@ describe("SpatialLabelLayoutEngine: camera edge cases", () => {
 });
 
 describe("SpatialLabelLayoutEngine: temporal behaviour", () => {
+  it("pulls the leader of a lone label back to its length after a zoom", () => {
+    // A lone label never collides: its leader must still be shortened within the solve, since a still camera
+    // asks for no further solve.
+    const engine = new SpatialLabelLayoutEngine({ temporal: { enabled: true } });
+    engine.setAnchorPosition("pin", { x: 0, y: 0, z: 0 });
+    engine.addLabel(makeLabel("l", "pin"));
+    const cam = (d: number) => monoView({ x: 0, y: d * 0.5, z: d });
+    for (const d of [40, 30, 20, 12, 8, 6]) engine.solve({ views: [cam(d)], deltaTime: 0.1 });
+    const still = engine.solve({ views: [cam(6)], deltaTime: 0.1 });
+    expect(still.diagnostics?.skipped).toBe(true);
+    const label = engine.inspect({ views: [cam(6)], deltaTime: 0 }).views[0]?.labels[0];
+    const pin = label?.anchor, rect = label?.rect;
+    if (!pin || !rect) throw new Error("label not projected");
+    const gap = Math.hypot(Math.max(rect.minX - pin.x, 0, pin.x - rect.maxX), Math.max(rect.minY - pin.y, 0, pin.y - rect.maxY));
+    // Before the fix the gap stayed at about 81 px for a 24 px leader.
+    expect(gap).toBeLessThan(engine.settings.leaderLengthPx * 1.25);
+  });
+
   it("keeps the layout under small head motion and warm-starts after larger motion", () => {
     const { engine } = randomScene({ count: 60, seed: 21, engine: { temporal: { enabled: true } } });
     let first = engine.solve({ views: [monoView(orbit(0))], deltaTime: 0.1 });
