@@ -8,7 +8,7 @@ import {
   type LayoutContext,
   type LayoutObserver,
 } from "@spacexr/spatial-label-layout-core";
-import { makeLabel, monoView, orbit, randomScene } from "../helpers/scene.js";
+import { makeLabel, monoView, orbit, randomScene, rng } from "../helpers/scene.js";
 
 const ctx = (view = monoView()): LayoutContext => ({ views: [view], deltaTime: 0.1 });
 
@@ -263,6 +263,29 @@ describe("SpatialLabelLayoutEngine: temporal behaviour", () => {
     expect(jumps).toBe(0);
     // Continuous corrections only: far below a label width (~1 m).
     expect(maxMove).toBeLessThan(0.15);
+  });
+
+  it("settles under a still camera when the cluster is too dense to clear", () => {
+    // 40 labels of 80 x 22 px around pins a few pixels apart: collisions the repairs cannot clear, only move.
+    for (const declutter of [true, false]) {
+      const engine = new SpatialLabelLayoutEngine({ declutter: { enabled: declutter }, temporal: { screenThresholdPx: 0.5 } });
+      const r = rng(1);
+      for (let i = 0; i < 40; i++) {
+        engine.setAnchorPosition(`a${i}`, { x: (r() * 2 - 1) * 6, y: 0, z: (r() * 2 - 1) * 6 });
+        engine.addLabel(makeLabel(`l${i}`, `a${i}`, { dimensions: { width: 80, height: 22 }, sizing: "screen" }));
+      }
+      const view = monoView({ x: 0, y: 60, z: 80 }, { x: 0, y: 0, z: 0 });
+      const ctx = { views: [view], deltaTime: 1 / 30 };
+      engine.solve(ctx);
+      for (let i = 0; i < 30; i++) engine.solve(ctx);
+      const settled = engine.lastLayout!.placements;
+      // Ten seconds of a still camera: nothing is solved again, nothing moves, nothing shows or hides.
+      for (let i = 0; i < 300; i++) {
+        const result = engine.solve(ctx);
+        expect(result.diagnostics?.skipped).toBe(true);
+        expect(result.placements).toEqual(settled);
+      }
+    }
   });
 
   it("re-solves when a label is resized or a pin moves", () => {
