@@ -1246,11 +1246,16 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       }
       lastCollisions = collisions;
       for (const o of this.observers) o.onIteration?.({ phase, iteration: it, collisions, violations, maxStepPx });
-      // Stop on collision threshold (constraints satisfied), small motion, or stagnation (brief 4.2).
+      // Stop once the constraints hold and the soft forces have settled, or on stagnation (brief 4.2).
+      // Constraints alone are not enough: a lone label never collides, and stopping there would leave
+      // the leader-length pull a single step per solve, so a leader stretched by a zoom stayed long.
       const residual = collisions + violations;
       if (residual === 0) {
-        it++;
-        break;
+        if (maxStepPx < cfg.convergenceTolerancePx) {
+          it++;
+          break;
+        }
+        continue;
       }
       if (residual < bestResidual) {
         bestResidual = residual;
