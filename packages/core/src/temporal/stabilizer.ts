@@ -29,6 +29,12 @@ export interface TemporalConfig {
   reorganizeAfterSolves: number;
   /** Minimum time (s) between two discrete jumps of the same label. */
   reorganizeCooldown: number;
+  /**
+   * Dead band on label motion (pixels, reference view): a label the solve would move by less than this
+   * stays where it was, unless staying brings back a collision, an occlusion or leaves it out of view.
+   * It keeps labels from vibrating while the solver settles. 0 disables it.
+   */
+  moveThresholdPx: number;
 }
 
 export const defaultTemporalConfig = (): TemporalConfig => ({
@@ -40,6 +46,7 @@ export const defaultTemporalConfig = (): TemporalConfig => ({
   maxDeferSeconds: 0.5,
   reorganizeAfterSolves: 3,
   reorganizeCooldown: 2,
+  moveThresholdPx: 2,
 });
 
 export type TemporalReason =
@@ -99,16 +106,17 @@ export class TemporalStabilizer {
       }
     }
     if (dirty) return { solve: true, reason: "dirty" };
-    if (screenMotionPx !== undefined) {
-      if (screenMotionPx > (this.config.screenThresholdPx ?? 0)) return { solve: true, reason: "camera-moved" };
-    } else {
-      const d = viewDelta(this.lastSolved, ref);
-      if (d.angle > this.config.angularThreshold || d.translation > this.config.translationThreshold) {
-        return { solve: true, reason: "camera-moved" };
-      }
-    }
+    if (!this.isStill(ref, screenMotionPx)) return { solve: true, reason: "camera-moved" };
     if (pendingReorganization) return { solve: true, reason: "pending-reorganization" };
     return { solve: false, reason: "below-threshold" };
+  }
+
+  /** True when neither the view nor, with `screenThresholdPx`, any pin moved past the thresholds since the last solve. */
+  isStill(ref: ResolvedView, screenMotionPx?: number): boolean {
+    if (!this.lastSolved) return false;
+    if (screenMotionPx !== undefined) return screenMotionPx <= (this.config.screenThresholdPx ?? 0);
+    const d = viewDelta(this.lastSolved, ref);
+    return d.angle <= this.config.angularThreshold && d.translation <= this.config.translationThreshold;
   }
 
   markSolved(ref: ResolvedView): void {

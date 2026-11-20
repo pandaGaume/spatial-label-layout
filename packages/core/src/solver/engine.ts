@@ -144,24 +144,27 @@ interface Evaluation {
   outOfView: Set<string>;
 }
 
-/** State of a label record a solve may write, kept to undo a solve that made the layout no better. */
-interface SavedRecord {
-  position: Vec3;
-  placed: boolean;
-  offset: Vec2 | null;
-  size: LabelDimensions | null;
-}
-
 /** Defects of a layout, the most serious first: collisions, labels hidden to declutter, out of view, crossings, occlusions. */
 type LayoutQuality = readonly number[];
 
-const layoutQuality = (result: LayoutResult, ev: Evaluation): LayoutQuality => [
-  result.unresolvedCollisions,
-  result.diagnostics?.hiddenLabels.filter((h) => h.reason === "decluttered").length ?? 0,
-  ev.outOfView.size,
-  ev.perView.reduce((s, v) => s + v.crossings, 0),
-  ev.occluded.size,
-];
+/** The layout a still solve must beat, and how to put it back. */
+interface Baseline {
+  /** Every active label, decluttered ones included. */
+  work: Work[];
+  positions: Map<Work, Vec3>;
+  /** Active labels the last solve decluttered: they stay hidden in this layout. */
+  decluttered: Set<string>;
+  evaluation: Evaluation;
+  quality: LayoutQuality;
+}
+
+/** Label fields that only change how a label is drawn: they leave the layout as it is. */
+const DRAWING_KEYS: ReadonlySet<string> = new Set(["userData", "routing", "leaderHidden"]);
+/** Label fields that change where a label stands or how much room it takes. */
+const GEOMETRY_KEYS: ReadonlySet<string> = new Set(["position", "home", "dimensions", "sizing", "priority"]);
+
+/** The label collides, is occluded or stands out of view. */
+const hasDefect = (ev: Evaluation, id: string): boolean => ev.colliding.has(id) || ev.outOfView.has(id) || ev.occluded.has(id);
 
 /** Lexicographic: a layout is better when its first differing count is lower. */
 const betterQuality = (a: LayoutQuality, b: LayoutQuality): boolean => {
@@ -197,14 +200,17 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
   private occlusion: OcclusionProvider;
   private routers: LeaderRouterRegistry;
   private dirty = true;
+  /**
+   * Something changed where a label stands or what it covers (a pin, a position, a home, a size, a
+   * priority, the settings) since the last solve. Without it, a dirty solve only saw labels come and go.
+   */
+  private reshaped = true;
   private lastResult: LayoutResult | null = null;
   private disposed = false;
   /** Accumulated `deltaTime` (s); drives reorganization cooldowns. */
   private clock = 0;
   /** Hysteresis state for discrete reorganizations (see TemporalConfig.reorganizeAfterSolves). */
   private reorg: ReorgState = newReorgState();
-  /** Defects left by the last kept solve: a solve that nothing outside asked for must do better. */
-  private lastQuality: LayoutQuality | null = null;
 
   constructor(options: EngineOptions = {}) {
     const { occlusion, observers, routers, ...config } = options;
@@ -225,12 +231,12 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     this.assertAlive();
     this.config = resolveSolverConfig(input, this.config);
     this.stabilizer.configure(this.config.temporal);
-    this.dirty = true;
+    this.dirty = this.reshaped = true;
   }
 
   setOcclusionProvider(provider: OcclusionProvider | null): void {
     this.occlusion = provider ?? new NoOcclusionProvider();
-    this.dirty = true;
+    this.dirty = this.reshaped = true;
   }
 
   setRouters(routers: LeaderRouterRegistry): void {
@@ -306,8 +312,10 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       rec.placed = true;
     }
     if (patch.routing) this.graph.setRouting(id, patch.routing);
-    const onlyPayload = Object.keys(patch).every((k) => k === "userData" || k === "routing");
-    if (!onlyPayload) this.dirty = true;
+    // What only changes how a label is drawn leaves the layout as it is.
+    const keys = Object.keys(patch).filter((k) => !DRAWING_KEYS.has(k));
+    if (keys.length > 0) this.dirty = true;
+    if (keys.some((k) => GEOMETRY_KEYS.has(k))) this.reshaped = true;
   }
 
   getLabel(id: string): SpatialLabel | undefined {
@@ -340,12 +348,12 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     this.assertAlive();
     const prev = this.anchors.get(anchor.id);
     this.anchors.set(anchor.id, { def: { ...anchor, localPosition: clone(anchor.localPosition) }, world: prev?.world ?? null });
-    this.dirty = true;
+    this.dirty = this.reshaped = true;
   }
 
   removeAnchor(id: string): void {
     this.assertAlive();
-    if (this.anchors.delete(id)) this.dirty = true;
+    if (this.anchors.delete(id)) this.dirty = this.reshaped = true;
   }
 
   getAnchor(id: string): LabelAnchor | undefined {
@@ -360,7 +368,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     if (!rec) this.anchors.set(id, (rec = { world: null }));
     const t = this.config.temporal;
     // With a screen threshold, pin motion is measured in pixels at the next solve instead.
-    if (!rec.world || (t.screenThresholdPx === undefined && distance(rec.world, worldPosition) > t.anchorMoveThreshold)) this.dirty = true;
+    if (!rec.world || (t.screenThresholdPx === undefined && distance(rec.world, worldPosition) > t.anchorMoveThreshold)) this.dirty = this.reshaped = true;
     rec.world = clone(worldPosition);
   }
 
@@ -407,10 +415,9 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     for (const r of this.records.values()) r.offset = null;
     for (const r of this.records.values()) if (r.placed) r.position = clone(r.label.position);
     this.lastResult = null;
-    this.lastQuality = null;
     this.stabilizer.reset();
     this.reorg = newReorgState();
-    this.dirty = true;
+    this.dirty = this.reshaped = true;
   }
 
   dispose(): void {
@@ -457,10 +464,12 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       return result;
     }
 
-    // Nothing moved since the last solve: this one only gives a defect its hysteresis. It is kept only if it
-    // makes the layout better, so that a still scene settles instead of trading one defect for another forever.
-    const settling = decision.reason === "pending-reorganization" && this.lastResult !== null && this.lastQuality !== null;
-    const before = settling ? this.saveRecords() : null;
+    // Nothing moved since the last solve: neither the view, nor a pin, nor where a label stands. The solve only
+    // gives a defect its hysteresis, or labels came and went. Its layout is kept only if it is better than
+    // leaving every label where it was, so a still scene settles instead of trading one defect for another.
+    const still =
+      this.lastResult !== null &&
+      (decision.reason === "pending-reorganization" || (decision.reason === "dirty" && !this.reshaped && this.stabilizer.isStill(ref, this.screenMotion(ref))));
 
     const topologyBefore = this.graph.snapshot();
     const relaxViews = context.referenceView ? [ref, ...views] : views;
@@ -527,6 +536,7 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
       // 2-3. Candidate initialization for new labels (and labels lost behind the camera).
       const initialized = this.initialize(work, ref, views);
       this.emitPhase("initialize", { initialized });
+      const baseline = still ? this.baseline(work, views) : null;
 
       // 4-5. Projected collision relaxation in every view, with warm start.
       let iterations = 0;
@@ -591,6 +601,52 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
         this.emitPhase("declutter", { hidden: toHide.size });
       }
 
+      const declutteredNow = [...hidden.values()].filter((r) => r === "decluttered").length;
+      const solved = this.quality(evaluation, declutteredNow);
+      const keep = baseline !== null && !betterQuality(solved, baseline.quality);
+      if (baseline && !keep) {
+        // Better, but only the labels the solve rid of a defect needed to move: the others go back where they
+        // were, as long as that is as good as the whole solve.
+        const moved = new Map(work.map((w) => [w, w.pos] as const));
+        for (const w of work) {
+          if (w.fresh || (hasDefect(baseline.evaluation, w.id) && !hasDefect(evaluation, w.id))) continue;
+          w.pos = baseline.positions.get(w) as Vec3;
+          w.frame = cfg.orienter.frame(w.pos, ref);
+        }
+        const partial = this.evaluate(work, views);
+        const partialQuality = this.quality(partial, declutteredNow);
+        if (betterQuality(partialQuality, baseline.quality) && !betterQuality(solved, partialQuality)) {
+          evaluation = partial;
+        } else {
+          for (const w of work) {
+            w.pos = moved.get(w) as Vec3;
+            w.frame = cfg.orienter.frame(w.pos, ref);
+          }
+        }
+      }
+      if (baseline && keep) {
+        // The attempt still counts for the backoff of the defects it tried to fix.
+        for (const [id, reason] of [...hidden]) if (reason === "decluttered") hidden.delete(id);
+        work.length = 0;
+        for (const w of baseline.work) {
+          w.pos = baseline.positions.get(w) as Vec3;
+          w.origin = clone(w.pos);
+          w.frame = cfg.orienter.frame(w.pos, ref);
+          if (baseline.decluttered.has(w.id)) {
+            hidden.set(w.id, "decluttered");
+            this.commit(w, ref);
+          } else work.push(w);
+        }
+        for (let i = messages.length - 1; i >= 0; i--) if (messages[i]?.code === "label-decluttered") messages.splice(i, 1);
+        if (baseline.decluttered.size > 0) {
+          messages.push({ code: "label-decluttered", message: `${baseline.decluttered.size} label(s) stay hidden by declutter`, labelIds: [...baseline.decluttered] });
+        }
+        messages.push({ code: "layout-kept", message: "no better layout: labels stay where they were" });
+        evaluation = baseline.evaluation;
+      } else {
+        evaluation = this.deadBand(work, ref, views, evaluation, declutteredNow);
+      }
+
       // 7. Diagnostics and result.
       if (evaluation.pairs.length > 0) {
         messages.push({
@@ -653,19 +709,8 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
         if (violations.length > 0) throw new TopologyError(`leader topology changed during solve: ${JSON.stringify(violations)}`);
       }
 
-      const quality = layoutQuality(result, evaluation);
-      if (before && !betterQuality(quality, this.lastQuality as LayoutQuality)) {
-        // The attempt counts for the backoff of the defects it tried to fix, but the layout stays as it was.
-        this.restoreRecords(before);
-        this.reorg.pending = this.computePending();
-        const kept = this.reuseLast(t0, "no-improvement");
-        for (const o of this.observers) o.onSolveEnd?.(kept);
-        return kept;
-      }
-
       this.lastResult = result;
-      this.lastQuality = quality;
-      this.dirty = false;
+      this.dirty = this.reshaped = false;
       for (const a of this.anchors.values()) a.solved = a.world ? clone(a.world) : null;
       this.reorg.pending = this.computePending();
       this.stabilizer.markSolved(ref);
@@ -776,21 +821,64 @@ export class SpatialLabelLayoutEngine implements LabelLayoutEngine {
     return undefined;
   }
 
-  private saveRecords(): Map<LabelRecord, SavedRecord> {
-    const out = new Map<LabelRecord, SavedRecord>();
-    for (const r of this.records.values()) {
-      out.set(r, { position: clone(r.position), placed: r.placed, offset: r.offset ? { ...r.offset } : null, size: r.size ? { ...r.size } : null });
-    }
-    return out;
+  /** Defects of a layout, the most serious first. Crossings count only when the solver minimizes them. */
+  private quality(ev: Evaluation, decluttered: number): LayoutQuality {
+    const crossings = this.config.minimizeCrossings ? ev.perView.reduce((s, v) => s + v.crossings, 0) : 0;
+    return [ev.pairs.length, decluttered, ev.outOfView.size, crossings, ev.occluded.size];
   }
 
-  private restoreRecords(saved: Map<LabelRecord, SavedRecord>): void {
-    for (const [r, s] of saved) {
-      r.position = s.position;
-      r.placed = s.placed;
-      r.offset = s.offset;
-      r.size = s.size;
+  /**
+   * Hysteresis on motion (`temporal.moveThresholdPx`): a placed label the solve moved by less than the
+   * threshold on screen goes back where it was, unless that brings back a defect of its own.
+   */
+  private deadBand(work: Work[], ref: ResolvedView, views: readonly ResolvedView[], ev: Evaluation, decluttered: number): Evaluation {
+    const t = this.config.temporal;
+    if (!t.enabled || t.moveThresholdPx <= 0) return ev;
+    const back: Array<[Work, Vec3]> = [];
+    for (const w of work) {
+      if (w.fresh || !w.hadPlacement) continue;
+      const a = projectPoint(ref, w.origin);
+      const b = projectPoint(ref, w.pos);
+      if (!a.inFront || !b.inFront) continue;
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d === 0 || d >= t.moveThresholdPx) continue;
+      back.push([w, w.pos]);
+      w.pos = clone(w.origin);
+      w.frame = this.config.orienter.frame(w.pos, ref);
     }
+    if (back.length === 0) return ev;
+    let next = this.evaluate(work, views);
+    if (betterQuality(this.quality(ev, decluttered), this.quality(next, decluttered))) {
+      // Worse: the labels that are back to a defect take the step after all.
+      for (const [w, p] of back) {
+        if (!hasDefect(next, w.id)) continue;
+        w.pos = p;
+        w.frame = this.config.orienter.frame(w.pos, ref);
+      }
+      next = this.evaluate(work, views);
+    }
+    return next;
+  }
+
+  /**
+   * The layout as it stands before the solve moves anything: every label where it was (new ones on
+   * their best candidate), and the labels the last solve decluttered still hidden.
+   */
+  private baseline(work: readonly Work[], views: readonly ResolvedView[]): Baseline {
+    const before = new Set((this.lastResult?.diagnostics?.hiddenLabels ?? []).filter((h) => h.reason === "decluttered").map((h) => h.id));
+    const decluttered = new Set(work.filter((w) => before.has(w.id)).map((w) => w.id));
+    const evaluation = this.evaluate(
+      work.filter((w) => !decluttered.has(w.id)),
+      views,
+      this.config.minimizeCrossings,
+    );
+    return {
+      work: [...work],
+      positions: new Map(work.map((w) => [w, clone(w.pos)] as const)),
+      decluttered,
+      evaluation,
+      quality: this.quality(evaluation, decluttered.size),
+    };
   }
 
   private commit(w: Work, ref: ResolvedView): void {

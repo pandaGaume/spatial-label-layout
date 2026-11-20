@@ -208,7 +208,9 @@ export type DiagnosticCode =
   | "label-decluttered"
   | "stereo-only-collision"
   | "iteration-budget-exhausted"
-  | "solve-skipped";
+  | "solve-skipped"
+  /** Nothing moved: the solve found no better layout, and the labels stayed where they were. */
+  | "layout-kept";
 
 export interface LayoutDiagnostic {
   code: DiagnosticCode;
