@@ -16,6 +16,7 @@ import { registerSpaceXrLabelLoader } from "@spacexr/spatial-label-layout-babylo
 
 const WIDTH = 800;
 const HEIGHT = 600;
+const ID = "3f6c1e2a-8b4d-4c7e-9a1f-2d5b6c7e8f90";
 
 const makeScene = (rightHanded: boolean): { scene: Scene; camera: FreeCamera } => {
   const engine = new NullEngine({ renderWidth: WIDTH, renderHeight: HEIGHT, textureSize: 512, deterministicLockstep: false, lockstepMaxSteps: 1 });
@@ -554,6 +555,32 @@ describe("SPACEXR_label in glTF", () => {
     expect((written.extensions!.SPACEXR_label as SpaceXrLabel).anchor!.position).toEqual([-3, -1, 2]);
   });
 
+  it("writes and reads back its id, its type and the data of the application", async () => {
+    const identified: SpaceXrLabel = { ...TAG, id: ID.toUpperCase(), type: "photo360", userData: { heading: 214, tags: ["north"] } };
+    const glb = await exportGlb(identified);
+    const written = documentOf(glb).nodes.find((node) => node.name === "tag")!.extensions!.SPACEXR_label;
+    expect(written).toEqual({ ...identified, id: ID });
+
+    const container = await LoadAssetContainerAsync(glb, makeScene(true).scene, { pluginExtension: ".glb" });
+
+    expect(getNodeLabel(container.transformNodes.find((node) => node.name === "tag")!)).toEqual({ ...identified, id: ID });
+  });
+
+  it("leaves out an id that is no UUID, with a warning, and keeps the label", async () => {
+    const warnings: string[] = [];
+    const warn = Logger.Warn;
+    Logger.Warn = (message: string | unknown[]) => {
+      if (/not a UUID/.test(String(message))) warnings.push(String(message));
+    };
+    try {
+      const written = documentOf(await exportGlb({ ...TAG, id: "photo-12" })).nodes.find((node) => node.name === "tag")!.extensions!.SPACEXR_label;
+      expect(written).toEqual(TAG);
+      expect(warnings).toHaveLength(1);
+    } finally {
+      Logger.Warn = warn;
+    }
+  });
+
   it("is ignored when malformed, and its node still loaded", async () => {
     const glb = await exportGlb({ size: { referenceHeight: -1, pixels: 10 } });
 
@@ -574,5 +601,52 @@ describe("LabelRuntime", () => {
     expect(() => new LabelRuntime(scene)).toThrow();
     runtime.dispose();
     expect(LabelRuntime.get(scene)).toBeUndefined();
+  });
+
+  it("finds a label by its id, in any case, and the labels of a type", () => {
+    const { scene } = makeScene(true);
+    const runtime = new LabelRuntime(scene);
+    const photo = makeLabel(scene, "photo").node;
+    const town = makeLabel(scene, "town").node;
+    const other = makeLabel(scene, "other").node;
+    setNodeLabel(photo, { id: ID, type: "photo360" });
+    setNodeLabel(town, { type: "place" });
+    setNodeLabel(other, { type: "photo360" });
+    for (const node of [photo, town, other]) runtime.attach(node);
+
+    expect(runtime.findLabel(ID)).toBe(photo);
+    expect(runtime.findLabel(ID.toUpperCase())).toBe(photo);
+    expect(runtime.findLabel("00000000-0000-4000-8000-000000000000")).toBeUndefined();
+    expect(runtime.labelsOfType("photo360")).toEqual([photo, other]);
+    expect(runtime.labelsOfType("place")).toEqual([town]);
+
+    runtime.detach(photo);
+    expect(runtime.findLabel(ID)).toBeUndefined();
+    expect(runtime.labelsOfType("photo360")).toEqual([other]);
+  });
+
+  it("warns of an id two labels share, and gives the first, then the next once it is gone", () => {
+    const { scene } = makeScene(true);
+    const runtime = new LabelRuntime(scene);
+    const first = makeLabel(scene, "first").node;
+    const second = makeLabel(scene, "second").node;
+    setNodeLabel(first, { id: ID });
+    setNodeLabel(second, { id: ID.toUpperCase() });
+    const warnings: string[] = [];
+    const warn = Logger.Warn;
+    Logger.Warn = (message: string | unknown[]) => {
+      if (/has the id/.test(String(message))) warnings.push(String(message));
+    };
+    try {
+      runtime.attach(first);
+      runtime.attach(second);
+    } finally {
+      Logger.Warn = warn;
+    }
+
+    expect(warnings).toHaveLength(1);
+    expect(runtime.findLabel(ID)).toBe(first);
+    first.dispose();
+    expect(runtime.findLabel(ID)).toBe(second);
   });
 });

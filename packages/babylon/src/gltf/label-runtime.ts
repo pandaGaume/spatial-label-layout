@@ -11,10 +11,18 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Logger } from "@babylonjs/core/Misc/logger.js";
 import type { Observer } from "@babylonjs/core/Misc/observable.js";
 import type { Scene } from "@babylonjs/core/scene.js";
-import { RadialCandidateGenerator, worldUnitsPerPixel, type EngineOptions } from "@spacexr/spatial-label-layout-core";
+import {
+  DEFAULT_LABEL_PRIORITY,
+  DEFAULT_LEADER_WIDTH,
+  RadialCandidateGenerator,
+  hasAnchor,
+  worldUnitsPerPixel,
+  type EngineOptions,
+  type SpaceXrLabel,
+} from "@spacexr/spatial-label-layout-core";
 import type { BabylonLabelNode } from "../label-renderer.js";
 import { BabylonLabelLayout, type BabylonLabelLayoutOptions } from "../layout.js";
-import { DEFAULT_LABEL_PRIORITY, DEFAULT_LEADER_WIDTH, getNodeLabel, hasAnchor, type SpaceXrLabel } from "./label.js";
+import { getNodeLabel } from "./label.js";
 
 export interface LabelRuntimeOptions {
   /**
@@ -135,6 +143,8 @@ const DEFAULT_GROUND_FRAMES = 30;
  */
 export class LabelRuntime {
   private readonly entries = new Map<TransformNode, Entry>();
+  /** The nodes of the attached labels by id, in lower case, the first attached first. */
+  private readonly byId = new Map<string, TransformNode[]>();
   /** The overlay each mesh of the overlay group belongs to, by the unique id of the mesh. */
   private readonly overlays = new Map<number, Entry>();
   private readonly overlayObservers = new Map<Mesh, Observer<Mesh>>();
@@ -187,6 +197,21 @@ export class LabelRuntime {
     return this.entries.get(node)?.body;
   }
 
+  /**
+   * The node of the attached label that has this id, in any case. When several
+   * share it, the first attached, then the next once it is gone.
+   */
+  findLabel(id: string): TransformNode | undefined {
+    return this.byId.get(id.toLowerCase())?.[0];
+  }
+
+  /** The nodes of the attached labels of a type, in the order they were attached. */
+  labelsOfType(type: string): TransformNode[] {
+    const out: TransformNode[] = [];
+    for (const entry of this.entries.values()) if (entry.label.type === type && !entry.node.isDisposed()) out.push(entry.node);
+    return out;
+  }
+
   /** Starts applying the label declared on a node. A node without a declaration is left alone. */
   attach(node: TransformNode): void {
     const label = getNodeLabel(node);
@@ -200,6 +225,14 @@ export class LabelRuntime {
     this.join(node, body);
     const entry: Entry = { node, label, body, depth: 0, order: this.attached++, laidOut: null };
     this.entries.set(node, entry);
+    if (label.id !== undefined) {
+      const id = label.id.toLowerCase();
+      const nodes = this.byId.get(id);
+      if (nodes) {
+        Logger.Warn(`SPACEXR_label: "${node.name}" has the id ${id} of "${nodes[0]!.name}"; findLabel gives the first.`);
+        nodes.push(node);
+      } else this.byId.set(id, [node]);
+    }
     node.onDisposeObservable.addOnce(() => this.forget(node));
     if (hasAnchor(label)) this.layOut(entry);
     if (label.overlay) this.overlay(entry);
@@ -591,6 +624,12 @@ export class LabelRuntime {
     const entry = this.entries.get(node);
     this.entries.delete(node);
     if (!entry) return;
+    if (entry.label.id !== undefined) {
+      const id = entry.label.id.toLowerCase();
+      const nodes = this.byId.get(id)?.filter((other) => other !== node);
+      if (nodes?.length) this.byId.set(id, nodes);
+      else this.byId.delete(id);
+    }
     if (this.drawing === entry) this.drawing = null;
     if (entry.laidOut) {
       this.laidOut.delete(entry.laidOut.id);

@@ -35,3 +35,5 @@ export type * from "./diagnostics/snapshot.js";
 
 export * from "./integration/ports.js";
 export * from "./integration/controller.js";
+
+export * from "./gltf/label.js";
