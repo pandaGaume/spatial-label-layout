@@ -1,8 +1,10 @@
+import { Logger } from "@babylonjs/core/Misc/logger.js";
 import type { Node } from "@babylonjs/core/node.js";
 import type { Nullable } from "@babylonjs/core/types.js";
 import { GLTFExporter } from "@babylonjs/serializers/glTF/2.0/glTFExporter.js";
 import type { IGLTFExporterExtensionV2 } from "@babylonjs/serializers/glTF/2.0/glTFExporterExtension.js";
-import { SPACEXR_LABEL, getNodeLabel } from "./label.js";
+import { SPACEXR_LABEL, cloneJson, isLabelId } from "@spacexr/spatial-label-layout-core";
+import { getNodeLabel } from "./label.js";
 
 type ExportNode = NonNullable<IGLTFExporterExtensionV2["postExportNodeAsync"]>;
 type GltfNode = Parameters<ExportNode>[1];
@@ -29,16 +31,21 @@ class SpaceXrLabelExporter implements IGLTFExporterExtensionV2 {
   ): Promise<Nullable<GltfNode>> {
     const label = getNodeLabel(babylonNode);
     if (label) {
+      // A reader ignores a malformed label whole: an id that is no UUID is left out, not the label.
+      if (label.id !== undefined && !isLabelId(label.id)) Logger.Warn(`${SPACEXR_LABEL} of "${babylonNode.name}": id "${label.id}" is not a UUID and is not written.`);
       // The anchor is in the frame of the parent of the node: it is converted as the translation of the node is.
       const anchor = label.anchor && {
         position: [convertToRightHanded ? -label.anchor.position[0] : label.anchor.position[0], label.anchor.position[1], label.anchor.position[2]],
         ...(label.anchor.ground ? { ground: { ...label.anchor.ground } } : {}),
       };
+      const { id, userData, ...rest } = label;
       const written = {
-        ...label,
+        ...rest,
         ...(label.size ? { size: { ...label.size } } : {}),
         ...(label.leader ? { leader: { ...label.leader } } : {}),
         ...(anchor ? { anchor } : {}),
+        ...(id !== undefined && isLabelId(id) ? { id: id.toLowerCase() } : {}),
+        ...(userData ? { userData: cloneJson(userData, "userData") } : {}),
       };
       node.extensions = { ...node.extensions, [SPACEXR_LABEL]: written };
       this.wasUsed = true;

@@ -4,8 +4,9 @@ import type { Nullable } from "@babylonjs/core/types.js";
 import type { GLTFLoader } from "@babylonjs/loaders/glTF/2.0/glTFLoader.js";
 import type { IGLTFLoaderExtension } from "@babylonjs/loaders/glTF/2.0/glTFLoaderExtension.js";
 import { registerGLTFExtension, unregisterGLTFExtension } from "@babylonjs/loaders/glTF/2.0/glTFLoaderExtensionRegistry.js";
+import { SPACEXR_LABEL, parseSpaceXrLabel } from "@spacexr/spatial-label-layout-core";
 import { LabelRuntime } from "./label-runtime.js";
-import { SPACEXR_LABEL, parseSpaceXrLabel, setNodeLabel } from "./label.js";
+import { setNodeLabel } from "./label.js";
 
 type LoadNode = NonNullable<IGLTFLoaderExtension["loadNodeAsync"]>;
 type GltfNode = Parameters<LoadNode>[1];

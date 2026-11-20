@@ -79,6 +79,18 @@ A label stands around its anchor by default. With `home`, a world position, it s
 engine.addLabel({ id: "mine", anchorId: "collar", position: home, home, dimensions: { width: 120, height: 24 }, sizing: "screen", priority: 1, visible: true, enabled: true });
 ```
 
+## The `SPACEXR_label` glTF extension
+
+The core defines the glTF node extension that declares a label, so that every adapter reads it the same way: the `SpaceXrLabel` type and its parts, the defaults, `parseSpaceXrLabel` (which throws on a malformed value), and the helpers `isLabelId` and `cloneJson`. Reading and writing glTF files belongs to the adapters; [`@spacexr/spatial-label-layout-babylon`](https://www.npmjs.com/package/@spacexr/spatial-label-layout-babylon) documents the properties.
+
+Besides placement and style, a label may carry an `id` (a UUID, kept in lower case), a `type` named by the application, and `userData`, a JSON object carried as it is.
+
+```ts
+import { parseSpaceXrLabel } from "@spacexr/spatial-label-layout-core";
+
+const label = parseSpaceXrLabel(gltfNode.extensions?.SPACEXR_label);
+```
+
 ## Leader routing
 
 `straight` (default) attaches the leader where the line from the pin meets the border of the label. `elbow` leaves the pin horizontally, turns vertically and enters the label through a horizontal stub. `polyline` goes through points the caller gives. Crossings are detected in projection and reduced by swapping label positions, never by reassigning a leader.

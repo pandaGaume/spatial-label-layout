@@ -65,15 +65,18 @@ A camera with rig cameras (WebXR, stereoscopic rigs) gives one view per rig came
 
 ## glTF labels: `SPACEXR_label`
 
-A glTF node may declare itself a label. The package reads the extension, writes it, and presents the nodes that carry it.
+A glTF node may declare itself a label. The extension is defined in [`@spacexr/spatial-label-layout-core`](https://www.npmjs.com/package/@spacexr/spatial-label-layout-core) (types, defaults, `parseSpaceXrLabel`), with no renderer behind it. This package reads it into Babylon.js nodes, writes it back, and presents the nodes that carry it.
 
 ```json
 "SPACEXR_label": {
+  "id": "3f6c1e2a-8b4d-4c7e-9a1f-2d5b6c7e8f90",
+  "type": "photo360",
   "facing": "screen",
   "size": { "referenceHeight": 0.35, "pixels": 14 },
   "overlay": true,
   "leader": { "color": [0.87, 0.47, 0.01], "width": 1.6, "anchorRadius": 6 },
-  "priority": 1
+  "priority": 1,
+  "userData": { "capturedAt": "2026-06-12", "heading": 214 }
 }
 ```
 
@@ -87,8 +90,13 @@ A label is an object made to be read. The origin of its node is where it stands.
 | `leader` | The style of the line that links the label to its anchor. Without `anchor`, it also makes the origin of the node the anchor. |
 | `anchor` | The point the label names: `position` in the frame of the parent of the node, and `ground` (`{ offset }`) to stand it on the displayed ground. |
 | `priority` | Labels of higher priority move less and are hidden last. Defaults to 1. |
+| `id` | Identity of the label, apart from the names of its node and meshes: a UUID, read and written in lower case. |
+| `type` | What kind of label it is, in the words of the application: `photo360`, `place`... |
+| `userData` | A JSON object the application attaches to the label, carried as it is. |
 
 `leader.color` is linear RGB, white by default; `leader.width` is in pixels, 1.5 by default; `leader.anchorRadius` is the radius in pixels of the mark drawn on the anchor, 0 by default for no mark. The extension is listed in `extensionsUsed` and never in `extensionsRequired`: a client that does not know it shows the node with the transform written in the glTF.
+
+A malformed extension is ignored whole on reading, so the exporter leaves out an `id` that is not a UUID, with a warning, rather than lose the label. `crypto.randomUUID()` gives a valid one. `userData` must hold JSON only: no functions, dates or non-finite numbers.
 
 Reading, with `@babylonjs/loaders`:
 
@@ -100,6 +108,8 @@ import { registerSpaceXrLabelLoader } from "@spacexr/spatial-label-layout-babylo
 registerSpaceXrLabelLoader();
 const labels = new LabelRuntime(scene, { hides, layout });
 ```
+
+An application finds its labels back with `labels.findLabel(id)`, whatever the case of the id, and `labels.labelsOfType(type)`; `getNodeLabel(node)` gives the whole declaration, `userData` included. Two labels with the same id get a warning when the second is attached, and `findLabel` gives the first until it leaves.
 
 The loader declares the label on the Babylon node it creates and attaches the node to the `LabelRuntime` of the scene it loads into. A scene has one runtime at most; without one, the declaration is kept and the node is not presented. `layout` holds settings of the layout engine, merged over the defaults: the length of the leaders, the gap between labels, the routing of the leaders. `hides(anchor, eye)` tells when the scene hides an anchor, the far side of a globe for instance: the label and its leader are then hidden.
 
