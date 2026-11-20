@@ -91,6 +91,12 @@ Three layers, from most to least frequent.
 
 After a jump, the motion term targets the new position. Without that it pulled the label straight back to where the defect was, which showed up as a relocate / drift back / relocate loop in the terrain example.
 
+**Still solves** are those where neither the view nor a pin moved past the thresholds, and no label changed position, home, size or priority: a defect waiting for its hysteresis, or labels that came and went (`visible`, `enabled`, a label added or removed). Such a solve is kept only if its layout is strictly better than leaving every label where it was. The comparison is lexicographic: collisions first, then decluttered labels, labels out of view, crossings, occlusions. When it is better, only the labels it rid of a defect move, unless moving the others too does better still. In a cluster too dense to clear, each repair used to push a collision onto a neighbour, which restarted its streak, and the engine solved on every frame with nothing moving. `leaderHidden`, like `routing` and `userData`, does not trigger a solve at all.
+
+`temporal.moveThresholdPx` (2 px) is a dead band on motion, for every solve: a placed label the solve would move by less than that on screen stays where it was, unless staying brings back a collision, an occlusion or leaves it out of view. On the dense cluster of the tests, with crossings counted, it cuts 30 sub-pixel changes over 300 solves down to 2. Set it to 0 to see the raw solver.
+
+`minimizeCrossings` is off by default. In 3D two leaders that cross on screen do not meet, and the swaps were the main source of labels trading places in a still scene. With it on, crossings also count as a defect in the comparison above.
+
 New labels are exempt because they are still being placed. The cost of all this: a collision appearing on an established layout can stay visible for about three solver ticks (0.3 s at 10 Hz). And while the camera keeps orbiting, labels do get relocated as hills start hiding them; the terrain example (100 labels, 160° orbit in 8 s) does about 20 jumps per second, two thirds of them occlusion relocations. Pure head jitter produces none, and a test checks that.
 
 `forceReset`, or a change of `CameraProvider.referenceFrameVersion`, triggers a controlled reset: XR reference space change, AR/VR switch, teleport.

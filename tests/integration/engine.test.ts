@@ -5,6 +5,8 @@ import {
   TopologyError,
   TransformAnchorProvider,
   Mat4Math,
+  projectPoint,
+  resolveView,
   type LayoutContext,
   type LayoutObserver,
 } from "@spacexr/spatial-label-layout-core";
@@ -302,6 +304,55 @@ describe("SpatialLabelLayoutEngine: temporal behaviour", () => {
         const result = engine.solve(ctx);
         expect(result.diagnostics?.skipped).toBe(true);
         expect(result.placements).toEqual(settled);
+      }
+    }
+  });
+
+  /** 25 labels of 80 x 22 px around pins a few pixels apart, and one label far away, settled under a still camera. */
+  const denseCluster = (options: ConstructorParameters<typeof SpatialLabelLayoutEngine>[0] = {}) => {
+    const engine = new SpatialLabelLayoutEngine({ declutter: { enabled: true }, temporal: { screenThresholdPx: 0.5 }, ...options });
+    const r = rng(1);
+    for (let i = 0; i < 25; i++) {
+      engine.setAnchorPosition(`a${i}`, { x: (r() * 2 - 1) * 3, y: 0, z: (r() * 2 - 1) * 3 });
+      engine.addLabel(makeLabel(`l${i}`, `a${i}`, { dimensions: { width: 80, height: 22 }, sizing: "screen" }));
+    }
+    engine.setAnchorPosition("far", { x: 200, y: 0, z: 0 });
+    engine.addLabel(makeLabel("far", "far", { dimensions: { width: 80, height: 22 }, sizing: "screen" }));
+    const ctx = { views: [monoView({ x: 0, y: 60, z: 80 }, { x: 0, y: 0, z: 0 })], deltaTime: 1 / 30 };
+    for (let i = 0; i < 31; i++) engine.solve(ctx);
+    return { engine, ctx };
+  };
+
+  it("does not solve again when only a leader is hidden or shown", () => {
+    const { engine, ctx } = denseCluster();
+    for (let i = 0; i < 10; i++) {
+      engine.updateLabel("far", { leaderHidden: i % 2 === 0 });
+      expect(engine.solve(ctx).diagnostics?.skipped).toBe(true);
+    }
+  });
+
+  it("keeps the labels in place when a label away from them comes and goes", () => {
+    // With crossings counted, a solve may still find a strictly better layout now and then, so the labels
+    // settle after a bounded number of changes; with crossings left out (the default), right away.
+    for (const [minimizeCrossings, settling] of [[true, 100], [false, 0]] as const) {
+      const { engine, ctx } = denseCluster({ minimizeCrossings });
+      const view = resolveView(ctx.views[0]!, 0);
+      const toggle = (i: number) => {
+        engine.updateLabel("far", { visible: i % 2 === 1 });
+        expect(engine.solve(ctx).diagnostics?.skipped).toBe(false);
+      };
+      // Where each label of the cluster shows on screen, if it shows.
+      const placed = () =>
+        new Map(engine.lastLayout!.placements.filter((p) => p.id !== "far").map((p) => [p.id, p.visible ? projectPoint(view, p.position) : null] as const));
+      for (let i = 0; i < settling; i++) toggle(i);
+      const settled = placed();
+      for (let i = settling; i < settling + 60; i++) {
+        toggle(i);
+        for (const [id, at] of placed()) {
+          const before = settled.get(id);
+          expect(at === null).toBe(before === null);
+          if (at && before) expect(Math.hypot(at.x - before.x, at.y - before.y)).toBeLessThan(1e-6);
+        }
       }
     }
   });

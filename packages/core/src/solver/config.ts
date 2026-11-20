@@ -75,6 +75,10 @@ export interface SolverConfig {
   initialization: InitializationMode;
   /** Preferred distance between anchor and the label edge (pixels). */
   leaderLengthPx: number;
+  /**
+   * Swap labels whose leaders cross on screen, and count crossings as a defect of the layout.
+   * Default false: in 3D two leaders that cross on screen do not meet.
+   */
   minimizeCrossings: boolean;
   maxSwapsPerSolve: number;
   avoidOcclusion: boolean;
@@ -122,7 +126,8 @@ export const defaultSolverConfig = (): SolverConfig => ({
   anchorViewMarginPx: 0,
   initialization: "candidates",
   leaderLengthPx: 24,
-  minimizeCrossings: true,
+  // In 3D two leaders that cross on screen do not meet: by default a label keeps its place rather than trade it.
+  minimizeCrossings: false,
   maxSwapsPerSolve: 32,
   avoidOcclusion: true,
   occlusionMode: "any",
