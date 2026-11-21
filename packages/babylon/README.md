@@ -4,7 +4,7 @@
 
 Babylon.js adapter for [`@spacexr/spatial-label-layout-core`](https://www.npmjs.com/package/@spacexr/spatial-label-layout-core): it gives the solver the views of the camera, and places the 3D objects of the application where the layout puts their labels, with a leader from each to its pin.
 
-The labels are objects the application builds itself: an extruded tag, a textured plane, a group of meshes. The adapter writes their position, orientation and scaling. It draws no text of its own.
+The labels are objects the application builds itself: an extruded tag, a textured plane, a group of meshes. The adapter writes their position, orientation and scaling, or leaves the orientation to a Babylon.js billboard mode. It draws no text of its own.
 
 ## Install
 
@@ -49,7 +49,24 @@ The layout advances before each render of the scene. An application that runs it
 | `front` | Local z direction the readable face looks toward: `"-z"` (default, as the planes Babylon.js builds) or `"+z"`. |
 | `dispose` | Releases what the node owns. Default: `node.dispose()`. |
 
-The node is oriented from the axes the layout measured the label with, not from a billboard mode of the engine, so the quad drawn is the quad solved. Leave `billboardMode` at 0 on it.
+By default the node is oriented from the axes the layout measured the label with, not from a billboard mode of the engine, so the quad drawn is the quad solved. Leave `billboardMode` at 0 on it.
+
+### Native billboards
+
+An application that would rather let Babylon.js turn its labels passes `orientation: "native"`:
+
+```ts
+const layout = new BabylonLabelLayout({
+  scene,
+  labels: { orientation: "native", create: (label) => ({ node: buildMyTag(label), width: 2, height: 0.8 }) },
+});
+```
+
+The renderer then sets `billboardMode` to `BILLBOARDMODE_ALL` on each node when it creates it, resets its rotation to identity, and from there on writes only its position and scaling. `front` still applies: a node whose face looks toward +z gets a mirrored depth, since the Babylon.js billboard turns local -z toward the viewer.
+
+`BILLBOARDMODE_ALL` copies the rotation of the camera, so the label stays parallel to the image plane. That is what the default orienter of the core, `ScreenAlignedOrienter`, assumes; the tests check that both give the same axes in left- and right-handed scenes. `BabylonLabelLayout` throws if the engine it is given uses another orienter. Babylon.js has no mode that matches `ViewpointOrienter`: `BILLBOARDMODE_USE_POSITION` aims the node from its scaled local space, and the non-uniform scaling of a label bends that aim. Keep `orientation: "layout"` for viewpoint or fixed orientation, and for the `X`, `Y` and `Z` modes.
+
+Babylon.js orients the node for the camera it renders with, and the layout solves for the camera it reads. With a `camera` option different from the camera that draws the scene, the two disagree. In WebXR each eye gets its own billboard while the solver places a quad facing the head: the gap is small, but the quad drawn is no longer exactly the quad solved. `engine.configure()` must also keep a screen-aligned orienter; the check runs only when the layout is built.
 
 ## Leaders
 

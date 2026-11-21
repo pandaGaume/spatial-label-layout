@@ -62,7 +62,7 @@ layout.engine.setAnchorPosition("summit", { x: 0, y: 2, z: 0 });
 layout.controller.addLabel({ id: "label-summit", anchorId: "summit", position: { x: 0, y: 2, z: 0 }, dimensions: { width: 120, height: 48 }, sizing: "screen", priority: 1, visible: true, enabled: true });
 ```
 
-The layout advances before each render of the scene. An application with its own frame loop passes `autoTick: false` and calls `layout.tick()`.
+The layout advances before each render of the scene. An application with its own frame loop passes `autoTick: false` and calls `layout.tick()`. With `labels: { orientation: "native", ... }` the adapter leaves the rotation to the `BILLBOARDMODE_ALL` of Babylon.js and writes only position and scaling; the [adapter README](packages/babylon/README.md#native-billboards) says when that matches the layout.
 
 ## Labels with a constant size on screen
 

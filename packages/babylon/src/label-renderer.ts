@@ -7,7 +7,8 @@ import type { BillboardTransform, LabelRenderer, SpatialLabel } from "@spacexr/s
  * of (an extruded tag, a textured plane, a group of meshes...). Its local x
  * axis reads to the right and its local y axis upward. The node must have no
  * parent that moves it: the renderer writes its world position, rotation and
- * scaling.
+ * scaling (with `orientation: "native"`, its billboard mode instead of its
+ * rotation).
  */
 export interface BabylonLabelNode {
   node: TransformNode;
@@ -25,9 +26,25 @@ export interface BabylonLabelNode {
   dispose?(): void;
 }
 
+/**
+ * Who turns the label nodes toward the viewer.
+ * - "layout" (default): the renderer writes the rotation of each node from the
+ *   axes the layout solved the label with, whatever orienter the engine uses.
+ * - "native": the node carries `BILLBOARDMODE_ALL` and Babylon.js turns it to
+ *   the camera it renders with; the renderer writes only its position and
+ *   scaling. That billboard is parallel to the image plane, so the engine must
+ *   use a screen-aligned orienter (its default).
+ */
+export type BabylonLabelOrientation = "layout" | "native";
+
+/** `TransformNode.BILLBOARDMODE_ALL`, without importing the class and its side effects. */
+const BILLBOARDMODE_ALL = 7;
+
 export interface BabylonLabelRendererOptions {
   /** Builds the node of a label when it enters the layout. */
   create(label: Readonly<SpatialLabel>): BabylonLabelNode;
+  /** Default "layout". */
+  orientation?: BabylonLabelOrientation;
   /** The payload of a label changed (`controller.updateLabel`): text, style... */
   refresh?(label: Readonly<SpatialLabel>, node: BabylonLabelNode): void;
 }
@@ -39,15 +56,21 @@ const AXIS_Z = new Vector3();
 /**
  * Billboard port for Babylon.js (brief: BabylonBillboardAdapter).
  *
- * Each node is oriented from the axes the layout measured the label with,
- * not from a billboard mode of the engine: the quad drawn is the quad solved.
- * It is scaled so that its local size shows as the size the layout gives,
- * which follows the camera for labels with "screen" sizing.
+ * By default each node is oriented from the axes the layout measured the
+ * label with, not from a billboard mode of the engine: the quad drawn is the
+ * quad solved. With `orientation: "native"`, Babylon.js orients it with
+ * `BILLBOARDMODE_ALL`, which gives the same axes as the screen-aligned
+ * orienter of the core for the camera the layout reads.
+ * The node is scaled so that its local size shows as the size the layout
+ * gives, which follows the camera for labels with "screen" sizing.
  */
 export class BabylonLabelRenderer implements LabelRenderer {
   private readonly nodes = new Map<string, BabylonLabelNode>();
+  readonly orientation: BabylonLabelOrientation;
 
-  constructor(private readonly options: BabylonLabelRendererOptions) {}
+  constructor(private readonly options: BabylonLabelRendererOptions) {
+    this.orientation = options.orientation ?? "layout";
+  }
 
   /** The node of a label, to restyle or pick it. */
   get(id: string): BabylonLabelNode | undefined {
@@ -58,6 +81,11 @@ export class BabylonLabelRenderer implements LabelRenderer {
     this.removeLabel(label.id);
     const entry = this.options.create(label);
     entry.node.rotationQuaternion ??= new Quaternion();
+    if (this.orientation === "native") {
+      // Babylon.js applies the billboard after the local rotation of the node, which must stay neutral.
+      entry.node.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
+      entry.node.billboardMode = BILLBOARDMODE_ALL;
+    }
     // Nothing shows before the layout placed the label.
     entry.node.setEnabled(false);
     this.nodes.set(label.id, entry);
@@ -71,6 +99,13 @@ export class BabylonLabelRenderer implements LabelRenderer {
     if (!visible) return;
     const { position, right, up } = transform;
     node.position.set(position.x, position.y, position.z);
+    const scale = transform.width / entry.width;
+    const front = entry.front ?? "-z";
+    if (this.orientation === "native") {
+      // The billboard of Babylon.js turns local -z toward the viewer in left- and right-handed scenes alike.
+      node.scaling.set(scale, transform.height / entry.height, front === "-z" ? scale : -scale);
+      return;
+    }
     // A rotation takes its third axis from the first two, whatever the handedness of the scene.
     AXIS_X.set(right.x, right.y, right.z);
     AXIS_Y.set(up.x, up.y, up.z);
@@ -80,8 +115,7 @@ export class BabylonLabelRenderer implements LabelRenderer {
     // the node is mirrored when its face would look the wrong way. Its x and y axes, which carry the reading
     // direction, are never mirrored.
     const towardViewer = AXIS_Z.x * transform.normal.x + AXIS_Z.y * transform.normal.y + AXIS_Z.z * transform.normal.z >= 0;
-    const scale = transform.width / entry.width;
-    node.scaling.set(scale, transform.height / entry.height, towardViewer === ((entry.front ?? "-z") === "+z") ? scale : -scale);
+    node.scaling.set(scale, transform.height / entry.height, towardViewer === (front === "+z") ? scale : -scale);
   }
 
   refreshLabel(label: Readonly<SpatialLabel>): void {
