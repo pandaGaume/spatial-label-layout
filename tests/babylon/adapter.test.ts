@@ -1,20 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
-import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
   EveryFrameScheduler,
   RadialCandidateGenerator,
+  ViewpointOrienter,
   projectPoint,
   resolveView,
   worldUnitsPerPixel,
   type LeaderRouting,
   type ResolvedView,
 } from "@spacexr/spatial-label-layout-core";
-import { BabylonCameraProvider, BabylonLabelLayout, type BabylonLabelNode } from "@spacexr/spatial-label-layout-babylon";
+import { BabylonCameraProvider, BabylonLabelLayout, type BabylonLabelNode, type BabylonLabelOrientation } from "@spacexr/spatial-label-layout-babylon";
 
 const WIDTH = 1280;
 const HEIGHT = 720;
@@ -43,11 +44,16 @@ const makeNode = (scene: Scene, front: "+z" | "-z"): BabylonLabelNode => {
   return { node, ...LOCAL, front };
 };
 
-const makeLayout = (rightHanded: boolean, front: "+z" | "-z" = "+z", routing: LeaderRouting = "straight"): { scene: Scene; layout: BabylonLabelLayout; view: () => ResolvedView } => {
+const makeLayout = (
+  rightHanded: boolean,
+  front: "+z" | "-z" = "+z",
+  routing: LeaderRouting = "straight",
+  orientation: BabylonLabelOrientation = "layout",
+): { scene: Scene; layout: BabylonLabelLayout; view: () => ResolvedView } => {
   const { scene } = makeScene(rightHanded);
   const layout = new BabylonLabelLayout({
     scene,
-    labels: { create: () => makeNode(scene, front) },
+    labels: { create: () => makeNode(scene, front), orientation },
     autoTick: false,
     scheduler: new EveryFrameScheduler(),
     // The first place tried stands to the upper right of the pin, clear of it on both axes.
@@ -98,11 +104,19 @@ describe.each([
     expect(Array.from(views[0]!.viewMatrix)).toEqual(before);
   });
 
-  it.each(["+z", "-z"] as const)("draws the label object where the layout solved it (face toward %s)", (front) => {
-    const { layout, view } = makeLayout(rightHanded, front);
+  it.each([
+    ["+z", "layout"],
+    ["-z", "layout"],
+    ["+z", "native"],
+    ["-z", "native"],
+  ] as const)("draws the label object where the layout solved it (face toward %s, orientation %s)", (front, orientation) => {
+    const { layout, view } = makeLayout(rightHanded, front, "straight", orientation);
     const entry = layout.labels.get("label")!;
     const node = entry.node;
     expect(node.isEnabled()).toBe(true);
+    // In native orientation Babylon.js turns the node, which keeps no rotation of its own.
+    expect(node.billboardMode).toBe(orientation === "native" ? TransformNode.BILLBOARDMODE_ALL : TransformNode.BILLBOARDMODE_NONE);
+    if (orientation === "native") expect(node.rotationQuaternion!.equalsWithEpsilon(Quaternion.Identity())).toBe(true);
     // The corners of the object, drawn by Babylon.js, cover the pixels the label asked for.
     const corners = [
       [-1, -1],
@@ -166,6 +180,13 @@ describe.each([
       expect(Vector3.Distance(from, new Vector3(route[i]!.x, route[i]!.y, route[i]!.z))).toBeLessThan(1e-6);
       expect(Vector3.Distance(to, new Vector3(route[i + 1]!.x, route[i + 1]!.y, route[i + 1]!.z))).toBeLessThan(1e-6);
     });
+  });
+
+  it("refuses native orientation with an orienter Babylon.js does not mirror", () => {
+    const { scene } = makeScene(rightHanded);
+    const labels = { create: () => makeNode(scene, "+z"), orientation: "native" as const };
+    expect(() => new BabylonLabelLayout({ scene, labels, engine: { orienter: new ViewpointOrienter() } })).toThrow(/viewpoint/);
+    expect(scene.onBeforeRenderObservable.hasObservers()).toBe(false);
   });
 
   it("follows the render loop of the scene and releases its objects", () => {

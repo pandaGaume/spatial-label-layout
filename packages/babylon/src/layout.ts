@@ -3,9 +3,9 @@ import type { Observer } from "@babylonjs/core/Misc/observable.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import {
   LabelLayoutController,
+  SpatialLabelLayoutEngine,
   type LabelLayoutControllerOptions,
   type ResolvedView,
-  type SpatialLabelLayoutEngine,
 } from "@spacexr/spatial-label-layout-core";
 import { BabylonCameraProvider, type PixelUnit } from "./camera.js";
 import { BabylonLabelRenderer, type BabylonLabelRendererOptions } from "./label-renderer.js";
@@ -43,6 +43,16 @@ export class BabylonLabelLayout {
 
   constructor(private readonly options: BabylonLabelLayoutOptions) {
     const { scene } = options;
+    if (options.labels.orientation === "native") {
+      const engine = options.engine;
+      const kind = engine instanceof SpatialLabelLayoutEngine ? engine.settings.orienter.kind : (engine?.orienter?.kind ?? "screen-aligned");
+      if (kind !== "screen-aligned") {
+        throw new Error(
+          `BabylonLabelLayout: labels with orientation "native" are turned by BILLBOARDMODE_ALL, parallel to the image plane, ` +
+            `but the engine orients them with a "${kind}" orienter. Use ScreenAlignedOrienter (the default) or orientation "layout".`,
+        );
+      }
+    }
     this.camera = new BabylonCameraProvider(scene, {
       ...(options.camera ? { camera: options.camera } : {}),
       ...(options.pixels ? { pixels: options.pixels } : {}),
